@@ -1,0 +1,39 @@
+# Rust build artifacts
+/target/
+Cargo.lock
+
+# Data directories
+/data/crossection_diff/
+/data/parsed_export/
+/data/text_export/
+
+# Generated output files
+/data/output.parquet
+/data/input.tsv
+/data/output.tsv
+*.parquet
+*.tsv
+
+# Exported text files
+*.txt
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Backup files
+*.bak
+*.backup
+
+# Temporary files
+*.tmp
+/tmp/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
