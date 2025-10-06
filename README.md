@@ -181,20 +181,13 @@ wikitext_parser_rust/
 ├── src/
 │   ├── main.rs                    # CLI and Parquet I/O (with --skip-lists flag)
 │   ├── parser.rs                  # Wikitext parsing logic with smart skipping
-│   ├── inspect.rs                 # TSV export utility
-│   ├── export_text.rs             # Input/output text file exporter
-│   └── export_parsed.rs           # Parsed-only text file exporter (NEW)
+│   └── export_parsed.rs           # Parsed text file exporter
 ├── data/
 │   ├── sample_wikitext.parquet    # Sample input data (10 articles)
-│   ├── output.parquet             # Processed output (generated)
-│   ├── input.tsv                  # Input TSV export (generated)
-│   ├── output.tsv                 # Output TSV export (generated)
-│   ├── text_export/               # Input/output comparison (generated)
-│   │   ├── input/                 # Original wikitext files
-│   │   └── output/                # Parsed plain text files
-│   └── parsed_export/             # Parsed-only export (generated)
-│       ├── wiki/                  # Official Wikipedia texts
-│       └── ruwiki/                # Ruwiki fork texts
+│   └── crossection_diff/          # Production data (gitignored)
+│       └── 2025-01-01/
+│           ├── 20251001_*.parquet # Raw input files
+│           └── parsed/            # Parsed output files
 ├── install.sh                     # Installation script
 ├── run.sh                         # Run parser script
 ├── parse_parallel.sh              # Parallel processing for large datasets
@@ -248,51 +241,15 @@ Each file includes a header with page ID and title, making it easy to:
 - Verify parsing quality across different articles
 - Resume interrupted exports (skips existing files)
 
-### 2. Generate TSV Files for Spreadsheet Analysis
+### 2. Debug Specific Articles
 
-Convert Parquet files to TSV format for spreadsheet programs:
-
-```bash
-# Export output to TSV
-cargo run --release --bin inspect -- data/output.parquet data/output.tsv
-
-# Export input for comparison
-cargo run --release --bin inspect -- data/sample_wikitext.parquet data/input.tsv
-```
-
-The inspect tool shows:
-- Schema information (column names and types)
-- Row counts and file sizes
-- Sample of first row for quick verification
-
-### 3. Automated Quality Checks
-
-Run automated verification to ensure proper parsing:
+Use `extract_article.py` to inspect raw wikitext for problematic articles:
 
 ```bash
-chmod +x verify_parsing.sh
-./verify_parsing.sh
+python3 extract_article.py data/crossection_diff/2025-01-01/parsed_file.parquet 5589360
 ```
 
-This script checks:
-- ✅ Templates removed (`{{...}}`)
-- ✅ Wiki links converted to plain text (`[[...]]`)
-- ✅ References removed (`<ref>...</ref>`)
-- ✅ Output contains substantial text content
-
-### 4. Sample Comparison
-
-View detailed side-by-side comparison of input vs output:
-
-```bash
-chmod +x compare_sample.sh
-./compare_sample.sh
-```
-
-Shows first 3 articles with:
-- Original wikitext (with all markup)
-- Parsed plain text (clean output)
-- Size reduction statistics
+Shows the original wikitext for debugging parsing issues.
 
 ## Advanced Features
 
@@ -320,15 +277,6 @@ This removes:
 
 Useful when you only want narrative paragraph text without list structures (like bibliography sections).
 
-### Debug Utilities
-
-Extract specific articles for debugging:
-
-```bash
-python3 extract_article.py <parquet_file> <page_id>
-```
-
-Shows the raw wikitext for a specific article to debug parsing issues.
 
 ## Dependencies
 

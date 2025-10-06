@@ -8,14 +8,6 @@ name = "wikitext_parser_rust"
 path = "src/main.rs"
 
 [[bin]]
-name = "inspect"
-path = "src/inspect.rs"
-
-[[bin]]
-name = "export_text"
-path = "src/export_text.rs"
-
-[[bin]]
 name = "export_parsed"
 path = "src/export_parsed.rs"
 
