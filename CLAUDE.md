@@ -30,7 +30,7 @@ cargo run --release --bin export_parsed -- <parsed.parquet> <output_dir_official
 # Convenience scripts
 ./install.sh                                           # Install Rust and build
 ./run.sh [input] [output]                             # Run parser with defaults
-./parse_parallel.sh <input_dir> <output_dir> [jobs]   # Process multiple files in parallel
+./parse_parallel.sh <input_dir> <output_dir> [jobs] [timeout] [keep_dirty]  # Process multiple files (two-phase parallel)
 ./export_parallel.sh [parsed_dir] [wiki_dir] [ruwiki_dir] [jobs]  # Export to text files in parallel
 ```
 
@@ -96,12 +96,13 @@ Same structure with renamed text columns:
 
 ## Important Implementation Details
 
-### Smart Article Skipping
-Articles are automatically skipped if they contain complex nested structures that cause parsing issues:
-- Threshold: >50 table rows AND (>200 templates OR >50 images)
-- These receive placeholder: `[Article skipped: contains complex nested structures that cause parsing issues]`
-- Prevents infinite loops/memory exhaustion on edge cases (<0.1% of articles)
-- Check in `parser.rs:6-16`
+### Timeout Safety
+Articles that exceed the parsing timeout are automatically skipped:
+- Default timeout: 30 seconds per article (configurable via `--timeout`)
+- `--timeout 0` disables timeout for maximum speed on known-clean datasets
+- Timed-out articles receive placeholder: `[Article skipped: parsing timeout after N seconds]`
+- Prevents hanging on complex nested structures (<0.1% of articles)
+- Implementation: Thread-based timeout wrapper in `main.rs:38-56`
 
 ### Regex Safety
 All regexes use bounded quantifiers to prevent catastrophic backtracking:

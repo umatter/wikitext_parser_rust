@@ -94,16 +94,28 @@ cargo run --release --bin wikitext_parser_rust -- --input data/sample_wikitext.p
 For production datasets with multiple parquet files:
 
 ```bash
-# Process all files in parallel (default: 4 parallel jobs)
+# Process all files in parallel (default: 4 jobs, 30s timeout)
 ./parse_parallel.sh data/input_dir data/output_dir
 
 # Custom parallel jobs (e.g., 8 jobs)
 ./parse_parallel.sh data/input_dir data/output_dir 8
+
+# No timeout for maximum speed (use only for known-clean datasets)
+./parse_parallel.sh data/input_dir data/output_dir 4 0
+
+# Custom timeout (e.g., 60 seconds per article)
+./parse_parallel.sh data/input_dir data/output_dir 4 60
+
+# Keep intermediate "dirty" files for debugging
+./parse_parallel.sh data/input_dir data/output_dir 4 30 true
 ```
 
-The parallel script:
+The parallel script uses a **two-phase approach**:
+- **Phase 1**: Parses all files in parallel (produces "dirty" output in `output_dir/dirty/`)
+- **Phase 2**: Cleans all files in parallel (produces final output in `output_dir/`)
 - Automatically skips already-processed files (resume support)
-- Shows progress for each file
+- Shows progress for each file and phase
+- Optionally keeps intermediate files for debugging
 - Uses cargo in release mode for optimal performance
 
 ## Input Format
