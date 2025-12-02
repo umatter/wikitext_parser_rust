@@ -27,10 +27,18 @@ cargo run --release --bin clean_parsed -- --input <dirty.parquet> --output <clea
 # Export parsed text to individual files
 cargo run --release --bin export_parsed -- <parsed.parquet> <output_dir_official> <output_dir_clone>
 
+# Single-column parsing (for deleted/added page analysis)
+cargo run --release --bin parse_single -- --input <input.parquet> --output <output.parquet>
+# Options:
+#   --text-column <name>   # Specify text column (auto-detected: text, content)
+#   --skip-lists           # Remove all lists from output
+#   --timeout <secs>       # Timeout per article (default: 30)
+
 # Convenience scripts
 ./install.sh                                           # Install Rust and build
 ./run.sh [input] [output]                             # Run parser with defaults
 ./parse_parallel.sh <input_dir> <output_dir> [jobs] [timeout] [keep_dirty]  # Process multiple files (two-phase parallel)
+./parse_single_parallel.sh <input_dir> <output_dir> [jobs] [timeout] [text_column]  # Single-column files (two-phase parallel)
 ./export_parallel.sh [parsed_dir] [wiki_dir] [ruwiki_dir] [jobs]  # Export to text files in parallel
 ```
 
@@ -69,6 +77,15 @@ The project uses a **two-phase processing architecture** with three binaries:
 - Creates separate directories for official Wikipedia vs Ruwiki fork versions
 - Each file contains header with page ID and title
 - Supports resume: skips already-exported files
+
+### Single-Column Parser (`src/parse_single.rs` - `parse_single` binary)
+- Handles single-column parquet files (not the two-column comparison format)
+- **Use case**: Parsing deleted pages (Wikipedia-only) or added pages (Ruwiki-only)
+- Auto-detects text column name (supports: `text`, `content`, `official_text`, `clone_text`)
+- Auto-detects page ID column (`page_id` or `pageid`) and title column (`page_title` or `title`)
+- Output column: `{text_column}_parsed` (e.g., `text_parsed`, `content_parsed`)
+- Same two-phase processing: parse → clean (via `clean_parsed` binary)
+- Supports flexible input schemas from different data sources
 
 ### Key Parsing Algorithm
 

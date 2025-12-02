@@ -15,6 +15,10 @@ path = "src/export_parsed.rs"
 name = "clean_parsed"
 path = "src/clean_parsed.rs"
 
+[[bin]]
+name = "parse_single"
+path = "src/parse_single.rs"
+
 [dependencies]
 parse_wiki_text = "0.1"
 parquet = "53.3.0"
