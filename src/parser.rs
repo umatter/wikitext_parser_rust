@@ -3,18 +3,6 @@ use regex::Regex;
 
 /// Parse wikitext and extract only plain paragraph text
 pub fn parse_wikitext(wikitext: &str, skip_lists: bool) -> String {
-    // Skip articles with complex nested structures that cause parsing issues
-    let table_row_count = wikitext.matches("|-").count();
-    let template_count = wikitext.matches("{{").count();
-    let file_count = wikitext.matches("[[Файл:").count() + wikitext.matches("[[File:").count();
-
-    // Detect problematic patterns: tables with many templates/images
-    if table_row_count > 50 && (template_count > 200 || file_count > 50) {
-        eprintln!("WARNING: Skipping article - {} table rows, {} templates, {} images (too complex)",
-                  table_row_count, template_count, file_count);
-        return String::from("[Article skipped: contains complex nested structures that cause parsing issues]");
-    }
-
     let config = Configuration::default();
     let output = config.parse(wikitext);
 
@@ -83,6 +71,8 @@ fn remove_image_fragments(text: &str) -> String {
 fn expand_common_templates(text: &str) -> String {
     let mut result = text.to_string();
 
+    // First, expand specific templates we want to preserve as text
+
     // Template {{СС3|18.1.1918}} → "18 января 1918"
     // This handles date templates with day.month.year format
     let date_re = Regex::new(r"\{\{СС3\|(\d+)\.(\d+)\.(\d+)\}\}").unwrap();
@@ -122,10 +112,8 @@ fn expand_common_templates(text: &str) -> String {
     let num_re = Regex::new(r"\{\{num\|(\d+)\}\}").unwrap();
     result = num_re.replace_all(&result, "$1").to_string();
 
-    // Clean up any remaining simple templates that just contain text/numbers
-    // Match {{TemplateNa me|value}} where value is simple alphanumeric
-    let simple_template_re = Regex::new(r"\{\{[^|{}]+\|([^|{}]+)\}\}").unwrap();
-    result = simple_template_re.replace_all(&result, "$1").to_string();
+    // Note: Additional cleaning (template removal, image fragments, etc.)
+    // is handled by the separate clean_parsed binary for better performance
 
     result
 }

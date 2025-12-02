@@ -73,11 +73,20 @@ If you prefer to run cargo commands directly:
 # Build
 cargo build --release
 
-# Run (standard mode)
-cargo run --release --bin wikitext_parser_rust -- --input data/sample_wikitext.parquet --output data/output.parquet
+# Step 1: Parse wikitext (produces "dirty" parquet with potential template fragments)
+cargo run --release --bin wikitext_parser_rust -- --input data/sample_wikitext.parquet --output data/dirty.parquet
 
-# Run with list removal (removes all bullet/numbered lists)
-cargo run --release --bin wikitext_parser_rust -- --input data/sample_wikitext.parquet --output data/output.parquet --skip-lists
+# Step 2: Clean the parsed output (removes template fragments and image markup)
+cargo run --release --bin clean_parsed -- --input data/dirty.parquet --output data/output.parquet
+
+# Optional: Run with list removal (removes all bullet/numbered lists)
+cargo run --release --bin wikitext_parser_rust -- --input data/sample_wikitext.parquet --output data/dirty.parquet --skip-lists
+
+# Optional: Disable timeout for maximum speed (use only if dataset parses cleanly)
+cargo run --release --bin wikitext_parser_rust -- --input data/sample_wikitext.parquet --output data/dirty.parquet --timeout 0
+
+# Optional: Custom timeout (e.g., 60 seconds per article)
+cargo run --release --bin wikitext_parser_rust -- --input data/sample_wikitext.parquet --output data/dirty.parquet --timeout 60
 ```
 
 ### Processing Large Datasets
@@ -85,16 +94,28 @@ cargo run --release --bin wikitext_parser_rust -- --input data/sample_wikitext.p
 For production datasets with multiple parquet files:
 
 ```bash
-# Process all files in parallel (default: 4 parallel jobs)
+# Process all files in parallel (default: 4 jobs, 30s timeout)
 ./parse_parallel.sh data/input_dir data/output_dir
 
 # Custom parallel jobs (e.g., 8 jobs)
 ./parse_parallel.sh data/input_dir data/output_dir 8
+
+# No timeout for maximum speed (use only for known-clean datasets)
+./parse_parallel.sh data/input_dir data/output_dir 4 0
+
+# Custom timeout (e.g., 60 seconds per article)
+./parse_parallel.sh data/input_dir data/output_dir 4 60
+
+# Keep intermediate "dirty" files for debugging
+./parse_parallel.sh data/input_dir data/output_dir 4 30 true
 ```
 
-The parallel script:
+The parallel script uses a **two-phase approach**:
+- **Phase 1**: Parses all files in parallel (produces "dirty" output in `output_dir/dirty/`)
+- **Phase 2**: Cleans all files in parallel (produces final output in `output_dir/`)
 - Automatically skips already-processed files (resume support)
-- Shows progress for each file
+- Shows progress for each file and phase
+- Optionally keeps intermediate files for debugging
 - Uses cargo in release mode for optimal performance
 
 ## Input Format
@@ -177,11 +198,12 @@ Only the main article text:
 
 ```
 wikitext_parser_rust/
-├── Cargo.toml                     # Project dependencies
+├── Cargo.toml                     # Project dependencies (3 binaries defined)
 ├── src/
-│   ├── main.rs                    # CLI and Parquet I/O (with --skip-lists flag)
-│   ├── parser.rs                  # Wikitext parsing logic with smart skipping
-│   └── export_parsed.rs           # Parsed text file exporter
+│   ├── main.rs                    # wikitext_parser_rust: Fast parser (Phase 1)
+│   ├── parser.rs                  # Core wikitext parsing logic (AST extraction)
+│   ├── clean_parsed.rs            # clean_parsed: Text cleaner (Phase 2)
+│   └── export_parsed.rs           # export_parsed: Export to individual text files
 ├── data/
 │   ├── sample_wikitext.parquet    # Sample input data (10 articles)
 │   └── crossection_diff/          # Production data (gitignored)
@@ -253,14 +275,42 @@ Shows the original wikitext for debugging parsing issues.
 
 ## Advanced Features
 
-### Smart Article Skipping
+### Two-Phase Processing Architecture
 
-The parser automatically detects and skips articles with problematic patterns that cause parsing issues:
+The parser uses a two-phase approach for optimal performance:
 
-- **Large tables with many templates**: Articles with >50 table rows AND (>200 templates OR >50 images)
-- These articles receive a placeholder: `[Article skipped: contains complex nested structures that cause parsing issues]`
-- Prevents infinite loops and memory exhaustion on edge cases
-- Typically affects <0.1% of articles (championship lists, large data tables, etc.)
+**Phase 1: Fast Parsing** (`wikitext_parser_rust`)
+- Extracts text from MediaWiki AST
+- Outputs "dirty" parquet with potential template fragments
+- Handles core parsing with optional timeout safety
+
+**Phase 2: Text Cleaning** (`clean_parsed`)
+- Removes leaked template syntax (`{{...}}`)
+- Cleans image markup fragments
+- Vectorized operations for high performance
+- Processes entire parquet columns at once
+
+This separation allows:
+- Faster parsing (~30% speedup)
+- Re-cleaning without re-parsing
+- Easy debugging of intermediate output
+
+### Timeout Control
+
+Control timeout behavior for parsing each article:
+
+```bash
+# Default: 30-second timeout (safe for unknown datasets)
+--timeout 30
+
+# No timeout: Maximum speed (use only for known-clean datasets)
+--timeout 0
+
+# Custom timeout: Adjust for complex articles
+--timeout 60
+```
+
+Articles that exceed the timeout receive a placeholder: `[Article skipped: parsing timeout after N seconds]`
 
 ### List Removal Option
 

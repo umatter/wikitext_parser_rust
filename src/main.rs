@@ -4,6 +4,9 @@ use anyhow::Result;
 use clap::Parser as ClapParser;
 use std::fs::File;
 use std::sync::Arc;
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
 
 use arrow::array::{Array, ArrayRef, RecordBatch, StringArray};
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
@@ -24,6 +27,32 @@ struct Args {
     /// Skip lists (remove all bullet/numbered lists from output)
     #[arg(long, default_value_t = false)]
     skip_lists: bool,
+
+    /// Timeout in seconds for parsing each article (0 = no timeout)
+    #[arg(long, default_value_t = 30)]
+    timeout: u64,
+}
+
+/// Parse wikitext with a timeout to handle problematic articles
+/// Returns the parsed text or a placeholder if parsing times out
+fn parse_wikitext_with_timeout(wikitext: &str, skip_lists: bool, timeout_secs: u64) -> String {
+    let wikitext = wikitext.to_string();
+    let (tx, rx) = mpsc::channel();
+
+    // Spawn parsing in a separate thread
+    thread::spawn(move || {
+        let result = parser::parse_wikitext(&wikitext, skip_lists);
+        let _ = tx.send(result);
+    });
+
+    // Wait for result with timeout
+    match rx.recv_timeout(Duration::from_secs(timeout_secs)) {
+        Ok(result) => result,
+        Err(_) => {
+            eprintln!("WARNING: Article parsing timed out after {} seconds", timeout_secs);
+            format!("[Article skipped: parsing timeout after {} seconds]", timeout_secs)
+        }
+    }
 }
 
 fn main() -> Result<()> {
@@ -50,7 +79,7 @@ fn main() -> Result<()> {
     // Process batches
     let processed_batches: Vec<RecordBatch> = batches
         .iter()
-        .map(|batch| process_batch(batch, args.skip_lists))
+        .map(|batch| process_batch(batch, args.skip_lists, args.timeout))
         .collect::<Result<Vec<_>>>()?;
 
     // Write output parquet file
@@ -71,7 +100,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn process_batch(batch: &RecordBatch, skip_lists: bool) -> Result<RecordBatch> {
+fn process_batch(batch: &RecordBatch, skip_lists: bool, timeout: u64) -> Result<RecordBatch> {
     let _schema = batch.schema();
 
     // Extract columns
@@ -114,7 +143,13 @@ fn process_batch(batch: &RecordBatch, skip_lists: bool) -> Result<RecordBatch> {
             if official_text.is_null(i) {
                 None
             } else {
-                let result = parser::parse_wikitext(official_text.value(i), skip_lists);
+                let result = if timeout == 0 {
+                    // No timeout - direct call for maximum speed
+                    parser::parse_wikitext(official_text.value(i), skip_lists)
+                } else {
+                    // Use timeout wrapper
+                    parse_wikitext_with_timeout(official_text.value(i), skip_lists, timeout)
+                };
                 eprintln!("  [{}] Done processing official text for page_id={}", i+1, pid);
                 Some(result)
             }
@@ -130,7 +165,13 @@ fn process_batch(batch: &RecordBatch, skip_lists: bool) -> Result<RecordBatch> {
             if clone_text.is_null(i) {
                 None
             } else {
-                let result = parser::parse_wikitext(clone_text.value(i), skip_lists);
+                let result = if timeout == 0 {
+                    // No timeout - direct call for maximum speed
+                    parser::parse_wikitext(clone_text.value(i), skip_lists)
+                } else {
+                    // Use timeout wrapper
+                    parse_wikitext_with_timeout(clone_text.value(i), skip_lists, timeout)
+                };
                 eprintln!("  [{}] Done processing clone text for page_id={}", i+1, pid);
                 Some(result)
             }
