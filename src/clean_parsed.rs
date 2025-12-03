@@ -28,7 +28,30 @@ fn main() -> Result<()> {
     // Read input parquet file
     let file = File::open(&args.input)?;
     let builder = ParquetRecordBatchReaderBuilder::try_new(file)?;
+    let schema = builder.schema().clone();
     let mut reader = builder.build()?;
+
+    // Find columns ending with _parsed or _paragraphs (text columns to clean)
+    let text_columns: Vec<(usize, String)> = schema
+        .fields()
+        .iter()
+        .enumerate()
+        .filter(|(_, field)| {
+            let name = field.name();
+            name.ends_with("_parsed") || name.ends_with("_paragraphs")
+        })
+        .map(|(i, field)| (i, field.name().clone()))
+        .collect();
+
+    if text_columns.is_empty() {
+        println!("Warning: No text columns found (columns ending with _parsed or _paragraphs)");
+        println!("Available columns: {:?}", schema.fields().iter().map(|f| f.name()).collect::<Vec<_>>());
+        return Ok(());
+    }
+
+    println!("Found {} text column(s) to clean: {:?}",
+             text_columns.len(),
+             text_columns.iter().map(|(_, name)| name.as_str()).collect::<Vec<_>>());
 
     // Collect all record batches
     let mut batches = Vec::new();
@@ -49,17 +72,17 @@ fn main() -> Result<()> {
         .enumerate()
         .map(|(i, batch)| {
             println!("  Cleaning batch {}/{}", i + 1, batches.len());
-            clean_batch(batch)
+            clean_batch(batch, &text_columns)
         })
         .collect::<Result<Vec<_>>>()?;
 
     // Write output parquet file
     println!("Writing output file: {}", args.output);
     let output_file = File::create(&args.output)?;
-    let schema = cleaned_batches[0].schema();
+    let out_schema = cleaned_batches[0].schema();
 
     let props = WriterProperties::builder().build();
-    let mut writer = ArrowWriter::try_new(output_file, schema, Some(props))?;
+    let mut writer = ArrowWriter::try_new(output_file, out_schema, Some(props))?;
 
     for batch in cleaned_batches {
         writer.write(&batch)?;
@@ -71,42 +94,28 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn clean_batch(batch: &RecordBatch) -> Result<RecordBatch> {
+fn clean_batch(batch: &RecordBatch, text_columns: &[(usize, String)]) -> Result<RecordBatch> {
     let schema = batch.schema();
-
-    // Get column indices
-    let official_idx = schema
-        .index_of("official_text_paragraphs")
-        .map_err(|_| anyhow::anyhow!("official_text_paragraphs column not found"))?;
-    let clone_idx = schema
-        .index_of("clone_text_paragraphs")
-        .map_err(|_| anyhow::anyhow!("clone_text_paragraphs column not found"))?;
-
-    // Extract the text columns
-    let official_text = batch
-        .column(official_idx)
-        .as_any()
-        .downcast_ref::<StringArray>()
-        .ok_or_else(|| anyhow::anyhow!("official_text_paragraphs is not a StringArray"))?;
-
-    let clone_text = batch
-        .column(clone_idx)
-        .as_any()
-        .downcast_ref::<StringArray>()
-        .ok_or_else(|| anyhow::anyhow!("clone_text_paragraphs is not a StringArray"))?;
-
-    // Clean the text columns
-    let cleaned_official = clean_text_array(official_text)?;
-    let cleaned_clone = clean_text_array(clone_text)?;
 
     // Build new column vector
     let mut new_columns: Vec<ArrayRef> = Vec::new();
+
     for (i, _field) in schema.fields().iter().enumerate() {
-        if i == official_idx {
-            new_columns.push(cleaned_official.clone());
-        } else if i == clone_idx {
-            new_columns.push(cleaned_clone.clone());
+        // Check if this column is a text column to clean
+        let is_text_column = text_columns.iter().any(|(idx, _)| *idx == i);
+
+        if is_text_column {
+            // Clean this text column
+            let text_array = batch
+                .column(i)
+                .as_any()
+                .downcast_ref::<StringArray>()
+                .ok_or_else(|| anyhow::anyhow!("Column {} is not a StringArray", i))?;
+
+            let cleaned = clean_text_array(text_array)?;
+            new_columns.push(cleaned);
         } else {
+            // Keep other columns as-is
             new_columns.push(Arc::clone(batch.column(i)));
         }
     }
