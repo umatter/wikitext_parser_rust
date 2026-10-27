@@ -25,6 +25,7 @@ path = "src/components/lib.rs"
 
 [dependencies]
 parse_wiki_text = "0.1"
+parse-wiki-text-2 = { path = "vendor/parse-wiki-text-2" }
 parquet = "53.3.0"
 arrow = "53.3.0"
 clap = { version = "4.5", features = ["derive"] }

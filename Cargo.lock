@@ -1015,6 +1015,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "parse-wiki-text-2"
+version = "0.2.0"
+
+[[package]]
 name = "parse_wiki_text"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1370,6 +1374,7 @@ dependencies = [
  "arrow",
  "clap",
  "parquet",
+ "parse-wiki-text-2",
  "parse_wiki_text",
  "regex",
  "serde",

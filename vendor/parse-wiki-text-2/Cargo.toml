@@ -1,0 +1,22 @@
+[package]
+authors = [
+	"Fredrik Portström <https://portstrom.com>",
+	"Sören Meier <s@renmeier.ch>"
+]
+description = "Parse wiki text from Mediawiki into a tree of elements"
+edition = "2024"
+license-file = "LICENSE"
+name = "parse-wiki-text-2"
+readme = "readme.md"
+repository = "https://github.com/soerenmeier/parse-wiki-text-2"
+version = "0.2.0"
+rust-version = "1.90"
+
+[dependencies]
+web-time = { version = "1.1.0", optional = true }
+
+[dev-dependencies]
+clap = { version = "4.0", features = ["derive"] }
+
+[features]
+wasm = ["dep:web-time"]
