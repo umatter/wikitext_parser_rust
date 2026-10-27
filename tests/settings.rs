@@ -130,6 +130,14 @@ fn language_prefixes() {
 }
 
 #[test]
+fn w_is_the_wikipedia_interwiki_prefix_not_a_language() {
+    for s in [ru(), Settings::load(Path::new("config/sites/ruwiki.toml")).unwrap()] {
+        assert!(s.is_interwiki_prefix("w"), "{}", s.site());
+        assert!(!s.is_language_prefix("w"), "{}", s.site());
+    }
+}
+
+#[test]
 fn variables_and_parser_functions() {
     let s = ru();
     assert!(s.is_variable("PAGENAME"));

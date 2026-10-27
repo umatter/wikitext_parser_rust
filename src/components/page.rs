@@ -2,12 +2,13 @@
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::time::Instant;
 
-use parse_wiki_text_2::{Node, Output};
+use parse_wiki_text_2::Node;
 
-use crate::frontend::{self, FrontendError};
+use crate::frontend::{self, FrontendError, Parsed};
 use crate::model::{Components, Key, PageOutput, PageRow, TimingRow, WarningCount, WarningRow};
 use crate::registry::Registry;
 use crate::settings::Settings;
+use crate::walk::{self, WalkError, WalkLimits};
 
 /// Calibrated in Task 10: 30 s x the median measured rate (see D8, Calibration).
 pub const DEFAULT_PARSE_BUDGET: u64 = 2_700_000_000;
@@ -37,28 +38,18 @@ struct Failure {
     message: String,
 }
 
-/// Why the walk stopped early (the walk of Task 13 returns this).
-#[derive(Debug, Clone, PartialEq)]
-// Constructed by the walk of Task 13; until then only the tests build them.
-#[allow(dead_code)]
-enum WalkError {
-    Budget { steps: u64 },
-    Depth { cap: usize },
-    Panic(String),
-}
-
+/// A walk that stopped early. (A walk that panics is caught by `guarded`.)
 impl From<WalkError> for Failure {
     fn from(e: WalkError) -> Failure {
         match e {
-            WalkError::Budget { steps } => Failure {
+            WalkError::Budget { nodes } => Failure {
                 status: "budget",
-                message: format!("walk exceeded its budget (used {steps})"),
+                message: format!("walk exceeded its budget (used {nodes} nodes)"),
             },
-            WalkError::Depth { cap } => Failure {
+            WalkError::DepthLimit { depth } => Failure {
                 status: "depth_limit",
-                message: format!("nesting deeper than {cap}"),
+                message: format!("nesting deeper than the cap (depth {depth})"),
             },
-            WalkError::Panic(m) => Failure { status: "panic", message: m },
         }
     }
 }
@@ -75,15 +66,16 @@ fn guarded<T>(f: impl FnOnce() -> T) -> Result<T, Failure> {
     })
 }
 
-/// Stub until Task 13: the structured walk.
+/// The structured walk, within the page's walk budget and depth cap.
 fn walk(
-    _text: &str,
-    _output: &Output<'_>,
-    _settings: &Settings,
-    _registry: &Registry,
-    _limits: &Limits,
+    text: &str,
+    parsed: &Parsed<'_>,
+    settings: &Settings,
+    registry: &Registry,
+    limits: &Limits,
 ) -> Result<Components, WalkError> {
-    Ok(Components::default())
+    let limits = WalkLimits { budget: limits.walk_budget, depth_cap: limits.depth_cap };
+    walk::walk(text, parsed, settings, registry, &limits)
 }
 
 /// Stub until Task 18: the fallback scanner.
@@ -157,7 +149,7 @@ fn ms(t: Instant) -> f64 {
 }
 
 type WalkFn<'f> =
-    &'f dyn Fn(&str, &Output<'_>, &Settings, &Registry, &Limits) -> Result<Components, WalkError>;
+    &'f dyn Fn(&str, &Parsed<'_>, &Settings, &Registry, &Limits) -> Result<Components, WalkError>;
 type ScanFn<'f> = &'f dyn Fn(&str, &Settings, &Registry) -> Components;
 
 pub fn process_page(
@@ -294,7 +286,7 @@ fn process_with(
     }
 
     let t1 = Instant::now();
-    let walked = guarded(|| walk(text, output, settings, registry, limits));
+    let walked = guarded(|| walk(text, &parsed, settings, registry, limits));
     let walk_ms = ms(t1);
     match walked {
         Ok(Ok(components)) => finish(page, parse_ms, walk_ms, components),
@@ -316,12 +308,10 @@ mod tests {
 
     #[test]
     fn walk_failures_map_to_statuses() {
-        let f: Failure = WalkError::Depth { cap: 400 }.into();
-        assert_eq!(f.status, "depth_limit");
-        let f: Failure = WalkError::Budget { steps: 9 }.into();
-        assert_eq!(f.status, "budget");
-        let f: Failure = WalkError::Panic("p".into()).into();
-        assert_eq!((f.status, f.message.as_str()), ("panic", "p"));
+        let f: Failure = WalkError::DepthLimit { depth: 401 }.into();
+        assert_eq!((f.status, f.message.as_str()), ("depth_limit", "nesting deeper than the cap (depth 401)"));
+        let f: Failure = WalkError::Budget { nodes: 9 }.into();
+        assert_eq!((f.status, f.message.as_str()), ("budget", "walk exceeded its budget (used 9 nodes)"));
     }
 
     use crate::model::Key;
@@ -356,13 +346,10 @@ mod tests {
 
     #[test]
     fn walk_failures_give_status_or_fallback() {
-        let cases: [(WalkError, &str); 3] = [
-            (WalkError::Budget { steps: 9 }, "budget"),
-            (WalkError::Depth { cap: 400 }, "depth_limit"),
-            (WalkError::Panic("boom".into()), "panic"),
-        ];
+        let cases: [(WalkError, &str); 2] =
+            [(WalkError::Budget { nodes: 9 }, "budget"), (WalkError::DepthLimit { depth: 401 }, "depth_limit")];
         for (err, status) in cases {
-            let walk = |_: &str, _: &Output<'_>, _: &Settings, _: &Registry, _: &Limits| Err(err.clone());
+            let walk = |_: &str, _: &Parsed<'_>, _: &Settings, _: &Registry, _: &Limits| Err(err.clone());
             let a = run(&walk, &ok_scan, false);
             assert_eq!(a.page.status, status);
             assert!(a.page.status_detail.unwrap().starts_with(&format!("{status}: ")));
@@ -374,7 +361,7 @@ mod tests {
 
     #[test]
     fn walk_panic_is_caught() {
-        let walk = |_: &str, _: &Output<'_>, _: &Settings, _: &Registry, _: &Limits| -> Result<Components, WalkError> {
+        let walk = |_: &str, _: &Parsed<'_>, _: &Settings, _: &Registry, _: &Limits| -> Result<Components, WalkError> {
             panic!("walk blew up")
         };
         let a = run(&walk, &ok_scan, false);
@@ -387,8 +374,8 @@ mod tests {
 
     #[test]
     fn scan_panic_gives_panic_row_naming_both() {
-        let walk = |_: &str, _: &Output<'_>, _: &Settings, _: &Registry, _: &Limits| {
-            Err(WalkError::Depth { cap: 400 })
+        let walk = |_: &str, _: &Parsed<'_>, _: &Settings, _: &Registry, _: &Limits| {
+            Err(WalkError::DepthLimit { depth: 401 })
         };
         let scan = |_: &str, _: &Settings, _: &Registry| -> Components { panic!("scan blew up") };
         let r = run(&walk, &scan, true);

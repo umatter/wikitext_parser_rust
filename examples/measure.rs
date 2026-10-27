@@ -1,10 +1,13 @@
-//! Measures the parser's counted steps and wall time per page version (Task 10).
+//! Measures the parser's counted steps and wall time per page version (Task 10), and the walk's nodes,
+//! depth and wall time (Task 13).
 //!
 //! Usage: measure <parquet> --label key=site:version ... [--budget N] [--cases slow,largest]
 //!                [--config-dir DIR] [--text-column NAME]
 //!
-//! Prints one TSV line per page version to stdout: `page_id version n_chars steps parse_ms status`.
-//! `status` is `ok` or `budget`. With `--budget 0` the parse has no limit, so rows whose `case`
+//! Prints one TSV line per page version to stdout:
+//! `page_id version n_chars steps parse_ms status walk_nodes walk_depth walk_ms`.
+//! `status` is `ok` or `budget`; the walk columns are `-` when the parse did not finish. The walk runs with
+//! the default limits and an empty registry. With `--budget 0` the parse has no limit, so rows whose `case`
 //! column says `slow` are skipped (they may never end). `--cases` keeps only rows whose `case`
 //! is in the list. The `case` column is read from the file itself when it has one.
 
@@ -16,8 +19,10 @@ use anyhow::{anyhow, bail, Context, Result};
 use wikitext_components::corpus;
 use wikitext_components::frontend::{self, FrontendError};
 use wikitext_components::input::{self, Label};
-use wikitext_components::page::DEFAULT_PARSE_BUDGET;
+use wikitext_components::page::{DEFAULT_DEPTH_CAP, DEFAULT_PARSE_BUDGET, DEFAULT_WALK_BUDGET};
+use wikitext_components::registry::Registry;
 use wikitext_components::settings::Settings;
+use wikitext_components::walk::{self, WalkLimits};
 
 struct Item {
     page_id: String,
@@ -83,6 +88,7 @@ fn main() -> Result<()> {
         }
     }
 
+    let registry = Registry::default();
     for it in &items {
         let case = it.case.as_deref();
         if budget == 0 && case == Some("slow") {
@@ -93,16 +99,27 @@ fn main() -> Result<()> {
                 continue;
             }
         }
-        let config = settings[&it.site].configuration();
+        let site = &settings[&it.site];
         let t = Instant::now();
-        let res = frontend::parse(&it.text, config, budget);
+        let res = frontend::parse(&it.text, site.configuration(), budget);
         let ms = t.elapsed().as_secs_f64() * 1000.0;
         let (steps, status) = match &res {
             Ok(p) => (p.steps, "ok"),
             Err(FrontendError::Budget { steps }) => (*steps, "budget"),
         };
+        let walked = match &res {
+            Ok(p) => {
+                let st = walk::stats(p);
+                let limits = WalkLimits { budget: DEFAULT_WALK_BUDGET, depth_cap: DEFAULT_DEPTH_CAP };
+                let t = Instant::now();
+                let _ = walk::walk(&it.text, p, site, &registry, &limits);
+                format!("{}\t{}\t{:.3}", st.nodes, st.max_depth, t.elapsed().as_secs_f64() * 1000.0)
+            }
+            Err(_) => "-\t-\t-".to_string(),
+        };
         drop(res);
-        println!("{}\t{}\t{}\t{}\t{:.3}\t{}", it.page_id, it.version, it.text.chars().count(), steps, ms, status);
+        let n_chars = it.text.chars().count();
+        println!("{}\t{}\t{}\t{}\t{:.3}\t{}\t{}", it.page_id, it.version, n_chars, steps, ms, status, walked);
     }
     Ok(())
 }

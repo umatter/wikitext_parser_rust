@@ -173,7 +173,7 @@ language_prefixes = [
     "ti", "tig", "tk", "tl", "tly", "tn", "to", "tok", "tpi", "tr", "trv", "ts", "tt", "tum", "tw", "ty",
     "tyv", "udm", "ug", "uk", "ur", "uz", "ve", "vec", "vep", "vi", "vls", "vo", "vro", "wa", "war", "wo",
     "wuu", "xal", "xh", "xmf", "yi", "yo", "yue", "za", "zea", "zgh", "zh", "zh-classical", "zh-min-nan",
-    "zh-yue", "zu", "cz", "dk", "epo", "jp", "zh-cn", "zh-tw", "cmn", "egl", "en-simple", "nb", "w",
+    "zh-yue", "zu", "cz", "dk", "epo", "jp", "zh-cn", "zh-tw", "cmn", "egl", "en-simple", "nb",
 ]
 
 # Wikimedia project and global interwiki prefixes (interwiki.php `__global:*`, `__list:ruwiki`).
@@ -209,7 +209,7 @@ interwiki_prefixes = [
     "tfwiki", "thelemapedia", "theopedia", "ticket", "tmbw", "tolkiengateway", "toolforge", "toolhub",
     "toollabs", "tools", "translatewiki", "tswiki", "tviv", "twiki", "twl", "tyvawiki", "umap",
     "uncyclopedia", "unihan", "urbandict", "usability", "usemod", "utrs", "v", "viaf", "vikidia", "vlos",
-    "votewiki", "voy", "vrts", "vrtwiki", "wcna", "weirdgloop", "werelate", "wg", "wikia", "wikiapiary",
+    "votewiki", "voy", "vrts", "vrtwiki", "w", "wcna", "weirdgloop", "werelate", "wg", "wikia", "wikiapiary",
     "wikiasite", "wikibooks", "wikicities", "wikicity", "wikiconference", "wikidata", "wikiedudashboard",
     "wikifunctions", "wikifur", "wikihow", "wikiindex", "wikilivres", "wikilivresru", "wikimania",
     "wikimedia", "wikinews", "wikinfo", "wikinvest", "wikipapers", "wikipedia", "wikipediawikipedia",
