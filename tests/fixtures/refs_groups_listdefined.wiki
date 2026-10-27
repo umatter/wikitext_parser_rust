@@ -1,0 +1,8 @@
+Факт<ref group="К">Комментарий.</ref>. Другой<ref name="b" />. Третий<ref name="c" />.
+
+== Примечания ==
+<references group="К" />
+<references>
+<ref name="b">{{книга |автор=Иванов И. И. |заглавие=Книга |место=М. |издательство=Наука |год=1990 |isbn=978-5-02-000000-0}}</ref>
+</references>
+{{примечания|refs=<ref name="c">[https://tass.ru/x ТАСС]</ref>}}

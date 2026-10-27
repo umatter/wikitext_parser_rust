@@ -1,0 +1,4 @@
+Текст{{efn|Пояснение {{cite web |url=https://a.ru/p |title=A}}}}.
+
+== Комментарии ==
+{{notelist}}
