@@ -10,3 +10,4 @@ pub mod settings;
 pub mod fingerprint;
 pub mod spans;
 pub mod urls;
+pub mod attrs;

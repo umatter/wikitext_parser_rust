@@ -11,7 +11,7 @@ pub struct UrlInfo {
     pub registrable_domain: Option<String>,
 }
 
-fn decode_entities(s: &str) -> String {
+pub(crate) fn decode_entities(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut rest = s;
     while let Some(i) = rest.find('&') {
