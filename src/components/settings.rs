@@ -84,9 +84,6 @@ impl Settings {
         let magic: Vec<&str> = raw.magic_words.iter().map(String::as_str).collect();
         let redirect: Vec<&str> = raw.redirect_magic_words.iter().map(String::as_str).collect();
         let protocols: Vec<&str> = raw.protocols.iter().map(String::as_str).collect();
-        // The crate stores magic and redirect words in a trie that cannot hold a word that is a prefix of
-        // another one: `перенапр` next to `перенаправление`, `ОГЛ` next to `ОГЛАВЛЕНИЕ`. The longer word is
-        // listed first in the file and wins; the shorter alias is silently dropped by the crate.
         let configuration = Configuration::new(&ConfigurationSource {
             category_namespaces: &categories,
             extension_tags: &ext,

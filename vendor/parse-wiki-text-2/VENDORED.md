@@ -16,6 +16,15 @@
    - New `Configuration::parse_with_budget(text, max_steps)`; `0` means unlimited.
    - `parse`, `parse_with_timeout` and `parse_without_timeout` keep their signatures and
      behaviour (they drop the step count).
+2. Trie (`src/trie.rs`). Marked "Patch: not in upstream".
+   - Upstream's trie stores a word's last byte as a final edge, so a word that is a prefix of another
+     cannot be stored: whichever is inserted second is dropped. Site settings need both (`#перенапр`
+     and `#перенаправление`, `__ОГЛ__` and `__ОГЛАВЛЕНИЕ__`), and a silently dropped alias makes
+     redirects and magic words go undetected.
+   - Every state can now carry a payload and edges; `find` returns the longest stored word that matches
+     and falls back to the last word seen on the path when a longer candidate fails. Insertion order does
+     not matter. `add_term` still returns `false` for a word that is already stored. Case folding and the
+     `find` result shape are unchanged. Unit tests in `src/trie.rs`.
 
 No build adjustments were needed: upstream `Cargo.toml` has no `[workspace]`, and its
 dev-dependencies (clap) are not built for a path dependency.

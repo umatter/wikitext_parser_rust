@@ -47,7 +47,7 @@ magic_words = [
     "NOTOC", "СТАТИЧЕСКОЕ_ПЕРЕНАПРАВЛЕНИЕ", "STATICREDIRECT", "ОГЛАВЛЕНИЕ", "ОГЛ", "TOC",
 ]
 
-# Redirect words without the leading # (MessagesRu.php, "redirect"). Longest first, because the parser stores them in a trie.
+# Redirect words without the leading # (MessagesRu.php, "redirect").
 redirect_magic_words = [
     "перенаправление", "перенапр", "REDIRECT",
 ]

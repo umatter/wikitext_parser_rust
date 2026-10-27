@@ -4,19 +4,16 @@
 
 use crate::case_folding_simple::CASE_FOLDING_SIMPLE;
 
-struct Character<T> {
-	character: u8,
-	next_state: State<T>,
-}
-
-#[derive(Clone, Copy)]
-enum State<T> {
-	Continue(u32),
-	Final(T),
+// Patch: not in upstream. Upstream stores a word's last byte as a `Final` edge, so a word that is a
+// prefix of another word cannot be stored (the second insertion is dropped or fails). Here every state
+// can hold a payload and have outgoing edges, and `find` returns the longest word that matches.
+struct State<T> {
+	edges: Vec<(u8, u32)>,
+	payload: Option<T>,
 }
 
 pub struct Trie<T> {
-	states: Vec<Vec<Character<T>>>,
+	states: Vec<State<T>>,
 }
 
 impl<T: Copy> Trie<T> {
@@ -24,51 +21,48 @@ impl<T: Copy> Trie<T> {
 		self.add_term_internal(term, payload, false)
 	}
 
-	fn add_folded_characters(
+	fn new_state(&mut self) -> u32 {
+		self.states.push(State {
+			edges: vec![],
+			payload: None,
+		});
+		(self.states.len() - 1) as u32
+	}
+
+	fn edge(&self, from: u32, byte: u8) -> Option<u32> {
+		self.states[from as usize]
+			.edges
+			.iter()
+			.find(|(b, _)| *b == byte)
+			.map(|(_, to)| *to)
+	}
+
+	/// Follows the bytes of `character` from `from`, creating states as needed. With `target`, the last
+	/// byte leads to that state (when it has no edge yet), which makes a folded variant share the state
+	/// of the original character.
+	fn add_character(
 		&mut self,
+		from: u32,
 		character: char,
-		initial_state: u32,
-		next_state: State<T>,
-	) {
-		if let Some(folded_characters) = simple_fold(character) {
-			for character in folded_characters {
-				let mut last_state = initial_state;
-				let mut character_buffer = [0; 4];
-				let character_bytes =
-					character.encode_utf8(&mut character_buffer).as_bytes();
-				let mut byte_iterator = character_bytes.iter().cloned();
-				let mut byte_item = byte_iterator.next();
-				'b: while let Some(byte) = byte_item {
-					for item in &self.states[last_state as usize] {
-						if item.character == byte {
-							match item.next_state {
-								State::Continue(next_state) => {
-									last_state = next_state
-								}
-								State::Final(_) => unreachable!(),
-							}
-							byte_item = byte_iterator.next();
-							continue 'b;
-						}
-					}
-					byte_item = byte_iterator.next();
-					if byte_item.is_none() {
-						self.states[last_state as usize].push(Character {
-							character: byte,
-							next_state,
-						});
-						break;
-					}
-					let intermediate_state = self.states.len() as _;
-					self.states[last_state as usize].push(Character {
-						character: byte,
-						next_state: State::Continue(intermediate_state),
-					});
-					last_state = intermediate_state;
-					self.states.push(vec![]);
+		target: Option<u32>,
+	) -> u32 {
+		let mut buffer = [0; 4];
+		let bytes = character.encode_utf8(&mut buffer).as_bytes();
+		let mut state = from;
+		for (index, byte) in bytes.iter().enumerate() {
+			state = match self.edge(state, *byte) {
+				Some(next) => next,
+				None => {
+					let next = match target {
+						Some(target) if index + 1 == bytes.len() => target,
+						_ => self.new_state(),
+					};
+					self.states[state as usize].edges.push((*byte, next));
+					next
 				}
-			}
+			};
 		}
+		state
 	}
 
 	pub fn add_term(&mut self, term: &str, payload: T) -> bool {
@@ -81,101 +75,56 @@ impl<T: Copy> Trie<T> {
 		payload: T,
 		case_folded: bool,
 	) -> bool {
-		let mut last_state = 0;
-		let mut character_iterator = term.chars();
-		let mut character_item = character_iterator.next();
-		while let Some(character) = character_item {
-			let mut character_buffer = [0; 4];
-			let character_bytes =
-				character.encode_utf8(&mut character_buffer).as_bytes();
-			character_item = character_iterator.next();
-			let mut byte_iterator = character_bytes.iter().cloned();
-			let mut byte_item = byte_iterator.next();
-			let state_before_character = last_state;
-			'a: while let Some(byte) = byte_item {
-				for item in &self.states[last_state as usize] {
-					if item.character == byte {
-						match item.next_state {
-							State::Continue(next_state) => {
-								last_state = next_state
-							}
-							State::Final(_) => return false,
-						}
-						byte_item = byte_iterator.next();
-						continue 'a;
+		let mut state = 0;
+		for character in term.chars() {
+			let before = state;
+			state = self.add_character(before, character, None);
+			if case_folded {
+				if let Some(folded) = simple_fold(character) {
+					for variant in folded {
+						self.add_character(before, *variant, Some(state));
 					}
 				}
-				byte_item = byte_iterator.next();
-				if byte_item.is_none() {
-					if character_item.is_none() {
-						self.states[last_state as usize].push(Character {
-							character: byte,
-							next_state: State::Final(payload),
-						});
-						if case_folded {
-							self.add_folded_characters(
-								character,
-								state_before_character,
-								State::Final(payload),
-							);
-						}
-						return true;
-					}
-					let next_state = self.states.len() as _;
-					self.states[last_state as usize].push(Character {
-						character: byte,
-						next_state: State::Continue(next_state),
-					});
-					self.states.push(vec![]);
-					if case_folded {
-						self.add_folded_characters(
-							character,
-							state_before_character,
-							State::Continue(next_state),
-						);
-					}
-					last_state = next_state;
-					break;
-				}
-				let next_state = self.states.len() as _;
-				self.states[last_state as usize].push(Character {
-					character: byte,
-					next_state: State::Continue(next_state),
-				});
-				last_state = next_state;
-				self.states.push(vec![]);
 			}
 		}
-		false
+		if self.states[state as usize].payload.is_some() {
+			return false;
+		}
+		self.states[state as usize].payload = Some(payload);
+		true
 	}
 
+	/// The longest stored word that `text` starts with: `Ok((length, payload))`. Otherwise `Err` holds
+	/// the position of the byte that ended the walk (`0` when the text ran out first).
 	pub fn find(&self, text: &str) -> Result<(usize, T), usize> {
 		let mut state = 0;
-		'outer: for (position, character1) in
-			text.as_bytes().iter().cloned().enumerate()
-		{
-			for character2 in &self.states[state as usize] {
-				if character1 == character2.character {
-					match character2.next_state {
-						State::Continue(next_state) => {
-							state = next_state;
-							continue 'outer;
-						}
-						State::Final(payload) => {
-							return Ok((position + 1, payload));
-						}
+		let mut best = None;
+		for (position, byte) in text.as_bytes().iter().cloned().enumerate() {
+			match self.edge(state, byte) {
+				Some(next) => {
+					state = next;
+					if let Some(payload) = self.states[state as usize].payload {
+						best = Some((position + 1, payload));
 					}
 				}
+				None => {
+					return match best {
+						Some(found) => Ok(found),
+						None => Err(position),
+					};
+				}
 			}
-			return Err(position);
 		}
-		Err(0)
+		match best {
+			Some(found) => Ok(found),
+			None => Err(0),
+		}
 	}
 
 	pub fn new() -> Self {
-		Trie {
-			states: vec![vec![]],
-		}
+		let mut trie = Trie { states: vec![] };
+		trie.new_state();
+		trie
 	}
 }
 
@@ -185,5 +134,42 @@ fn simple_fold(character: char) -> Option<&'static [char]> {
 	{
 		Err(_) => None,
 		Ok(index) => Some(CASE_FOLDING_SIMPLE[index].1),
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::Trie;
+
+	fn check(words: &[&str]) {
+		let mut trie = Trie::new();
+		for (i, w) in words.iter().enumerate() {
+			assert!(trie.add_term(w, i as u32), "{w}");
+		}
+		let at = |t: &str| trie.find(t).map(|(n, p)| (n, words[p as usize]));
+		assert_eq!(at("огл__"), Ok((6, "ОГЛ")));
+		assert_eq!(at("ОГЛАВЛЕНИЕ__"), Ok((20, "ОГЛАВЛЕНИЕ")));
+		// A longer candidate that fails partway falls back to the last word seen on the path.
+		assert_eq!(at("оглавл__"), Ok((6, "ОГЛ")));
+		assert!(trie.find("ОГ__").is_err());
+		assert!(trie.find("").is_err());
+	}
+
+	#[test]
+	fn prefix_word_short_first() {
+		check(&["ОГЛ", "ОГЛАВЛЕНИЕ"]);
+	}
+
+	#[test]
+	fn prefix_word_long_first() {
+		check(&["ОГЛАВЛЕНИЕ", "ОГЛ"]);
+	}
+
+	#[test]
+	fn duplicate_word_is_rejected() {
+		let mut trie = Trie::new();
+		assert!(trie.add_term("ab", 1u32));
+		assert!(!trie.add_term("AB", 2));
+		assert_eq!(trie.find("ab"), Ok((2, 1)));
 	}
 }

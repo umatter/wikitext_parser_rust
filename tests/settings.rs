@@ -60,14 +60,44 @@ fn cyrillic_link_trail() {
 #[test]
 fn russian_redirect() {
     let s = ru();
-    // "#перенапр" is also a redirect word, but the vendored crate keeps its words in a trie in which no word
-    // may be a prefix of another, so only the longer "перенаправление" works. The same holds for the
-    // behaviour switches __ОГЛ__ / __БЕЗ_ОГЛ__ next to __ОГЛАВЛЕНИЕ__ / __БЕЗ_ОГЛАВЛЕНИЯ__.
-    for w in ["#перенаправление [[Москва]]", "#REDIRECT [[Москва]]"] {
+    for w in ["#перенаправление [[Москва]]", "#перенапр [[Москва]]", "#REDIRECT [[Москва]]"] {
         let p = frontend::parse(w, s.configuration(), 0).unwrap();
         assert!(has_node(&p, "Redirect"), "{w}");
     }
     assert!(s.redirect_words().iter().any(|w| w == "перенаправление"));
+}
+
+#[test]
+fn every_redirect_word_and_magic_word_is_recognised() {
+    let text = std::fs::read_to_string("config/sites/ru.wikipedia.toml").unwrap();
+    let table: toml::Table = text.parse().unwrap();
+    let words = |key: &str| -> Vec<String> {
+        table[key].as_array().unwrap().iter().map(|v| v.as_str().unwrap().to_string()).collect()
+    };
+    let s = ru();
+    for w in words("redirect_magic_words") {
+        let src = format!("#{w} [[Москва]]");
+        let p = frontend::parse(&src, s.configuration(), 0).unwrap();
+        assert!(matches!(p.output.nodes.first(), Some(parse_wiki_text_2::Node::Redirect { .. })), "{src}");
+    }
+    for w in words("magic_words") {
+        let src = format!("__{w}__");
+        let p = frontend::parse(&src, s.configuration(), 0).unwrap();
+        assert!(matches!(p.output.nodes.first(), Some(parse_wiki_text_2::Node::MagicWord { .. })), "{src}");
+    }
+}
+
+#[test]
+fn prefix_aliases_are_not_dropped() {
+    let s = ru();
+    for src in ["#перенапр [[Москва]]", "__ОГЛ__", "__БЕЗ_ОГЛ__"] {
+        let p = frontend::parse(src, s.configuration(), 0).unwrap();
+        let first = &p.output.nodes[0];
+        assert!(
+            matches!(first, parse_wiki_text_2::Node::Redirect { .. } | parse_wiki_text_2::Node::MagicWord { .. }),
+            "{src}: {first:?}"
+        );
+    }
 }
 
 #[test]
