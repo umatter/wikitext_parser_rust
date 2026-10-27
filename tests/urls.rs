@@ -34,6 +34,12 @@ fn never_panics() {
         let u = analyse(s);
         assert!(u.registrable_domain.is_none() || u.host.is_some(), "{s:?}");
     }
+    for s in ["https://web.archive.org/web/2019/президент.рф/a", "https://web.archive.org/web/2019/ыыыыыыы.рф/x"] {
+        let _ = analyse(s);
+    }
+    let u = analyse("https://web.archive.org/web/2019/президент.рф/a");
+    assert_eq!(u.url, "http://президент.рф/a");
+    assert_eq!(u.host.as_deref(), Some("президент.рф"));
     assert_eq!(analyse("").host, None);
     assert_eq!(analyse("garbage text").host, None);
     assert_eq!(analyse("http://").host, None);
@@ -65,4 +71,14 @@ fn char_index() {
     let ci = CharIndex::new(&big);
     assert_eq!(ci.char_of(big.len() - 1), 300_000);
     assert_eq!(ci.char_of(big.len()), 300_001);
+}
+
+#[test]
+fn ip_hosts_have_no_registrable_domain() {
+    let u = analyse("http://127.0.0.1/x");
+    assert_eq!(u.host.as_deref(), Some("127.0.0.1"));
+    assert_eq!(u.registrable_domain, None);
+    let u = analyse("http://[::1]/x");
+    assert!(u.host.is_some());
+    assert_eq!(u.registrable_domain, None);
 }

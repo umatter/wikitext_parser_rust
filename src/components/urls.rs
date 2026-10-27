@@ -67,7 +67,7 @@ fn with_scheme(orig: &str) -> Option<String> {
         return Some(orig.to_string());
     }
     for p in ["https:/", "http:/"] {
-        if orig.len() > p.len() && orig[..p.len()].eq_ignore_ascii_case(p) && !orig[p.len()..].starts_with('/') {
+        if orig.len() > p.len() && orig.get(..p.len()).is_some_and(|h| h.eq_ignore_ascii_case(p)) && !orig[p.len()..].starts_with('/') {
             return Some(format!("{}/{}", &orig[..p.len()], &orig[p.len()..]));
         }
     }
@@ -128,6 +128,9 @@ pub fn analyse(raw: &str) -> UrlInfo {
         archive_url = Some(std::mem::replace(&mut url, orig));
     }
     let host = host_of(&url);
-    let registrable_domain = host.as_deref().and_then(registrable);
+    let registrable_domain = host
+        .as_deref()
+        .filter(|h| h.parse::<std::net::IpAddr>().is_err())
+        .and_then(registrable);
     UrlInfo { url, archive_url, host, registrable_domain }
 }
