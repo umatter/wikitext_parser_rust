@@ -9,8 +9,8 @@ use crate::model::{Components, Key, PageOutput, PageRow, TimingRow, WarningCount
 use crate::registry::Registry;
 use crate::settings::Settings;
 
-/// Placeholder until Task 10 calibrates it.
-pub const DEFAULT_PARSE_BUDGET: u64 = 2_000_000_000;
+/// Calibrated in Task 10: 30 s x the median measured rate (see D8, Calibration).
+pub const DEFAULT_PARSE_BUDGET: u64 = 2_700_000_000;
 pub const DEFAULT_WALK_BUDGET: u64 = 50_000_000;
 pub const DEFAULT_DEPTH_CAP: usize = 400;
 const MAX_WARNINGS: usize = 100;

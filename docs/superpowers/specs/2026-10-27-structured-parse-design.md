@@ -437,6 +437,36 @@ worst case (fork issue #1) before release, because a bounded fix there beats bot
 fallback. That threshold is my call. The 10 corpus pages that timed out under v0.1.0 are the first test of
 any such fix.
 
+#### Calibration (2026-10-27)
+
+Measured with `cargo run --release --example measure` (single thread, one machine, 12 cores), release build at
+commit `181dfb8` plus the Task 10 changes. Only aggregate figures from the performance sample appear here.
+
+- **Rate.** On the 20 largest non-slow versions of the public corpus (`tests/corpus/wikipedia_v1.parquet`, parsed
+  with no budget), steps per second ranged from 4.4e7 to 1.07e8 with a median of 8.98e7 (about 90 M steps per
+  second, 260,000-character pages in 2.5 to 5.7 ms). The 30-second budget is then 30 x 8.98e7 = 2.69e9, rounded
+  to two significant digits: `DEFAULT_PARSE_BUDGET = 2_700_000_000`.
+- **Slow and largest pages.** All 19 distinct corpus rows marked `slow` (10) or `largest` (9) finish under that
+  budget with status `ok`. The largest takes 339,730 steps and about 5.6 ms (the 10 pages that timed out under
+  v0.1.0 take at most 207,613 steps and 7 ms). None is over budget. So the step budget is about four orders
+  of magnitude above anything in the corpus: it is a guard against a runaway parse, not a limit real pages meet.
+- **Performance sample.** One row group (row group 0) of the 2025 cross-section: 14,568 page pairs, 29,136 page
+  versions. Pages over budget: 0 of 14,568 official (0.000%), 0 of 14,568 clone (0.000%), below the 0.05%
+  threshold. Steps (median / p90 / p99 / p99.9 / max): official 7,170 / 28,250 / 118,224 / 271,987 / 684,448;
+  clone 6,846 / 26,502 / 107,772 / 264,761 / 617,729. Parse time in ms (same quantiles, max): official 0.13 /
+  0.47 / 1.82 / 4.37 / 11.5; clone 0.12 / 0.43 / 1.72 / 4.13 / 10.4.
+- **Throughput.** `parse_components --jobs 12` on the sample, default budget: 6,100 to 7,300 pages per second
+  over three runs (wall time 4.8 s for 29,136 versions), 0 seconds over budget. The walk is still a stub,
+  so this is parse plus input, output and the `pages` and `timings` tables. Projected on this machine at
+  6,100 pages per second: 2 x 866,484 versions about 4.7 min; 1.4 M about 3.8 min; 1.1 M about 3.0 min. All are
+  far below the 8-hour target (D9). The real walk will add to this.
+- **Batch stalls.** No page exceeded the budget, so no stall from a budget page was observed. The sum of
+  per-page parse times is 6.6 s, or 0.55 s over 12 threads; with 256-row batches, waiting for each batch's
+  slowest page raises that bound only to 0.56 s. The measured wall time is 4.8 s, so parse time is not what limits
+  the run; reading, converting and writing are. If a page ever ran to the budget (about 30 s), its batch would
+  wait for it.
+
+
 ### D9. Efficiency
 
 - One process handles one input file or a whole directory, so the per-file `cargo run` in the scripts goes
