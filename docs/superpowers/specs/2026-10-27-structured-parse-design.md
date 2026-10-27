@@ -84,7 +84,10 @@ These would make the work a failure even if it runs:
 
 ## Constraints
 
-- Rust, in this repository, on this branch. The repository is public.
+- Rust, in this repository, on this branch. The repository is public. Wikipedia markup may be committed (CC
+  BY-SA, attributed). Ruwiki markup, and anything that reproduces it, never enters the repository: expected
+  outputs, snapshots and hand-checked facts of Ruwiki versions all stay in the private replication package
+  (D10).
 - The legacy source files (`src/parser.rs`, `src/main.rs`, `src/clean_parsed.rs`, `src/parse_single.rs`,
   `src/export_parsed.rs`) and the shell scripts keep their behaviour. Prefer not to touch them at all. The
   legacy path keeps `parse_wiki_text = "0.1"` (0.1.5).
@@ -199,9 +202,9 @@ The parser needs a few settings of the wiki software to read Russian markup corr
 These live in a static, committed file per site: `config/sites/ru.wikipedia.toml` and
 `config/sites/ruwiki.toml`. They are written once, from MediaWiki's Russian language file
 (`languages/messages/MessagesRu.php` in the MediaWiki source) and Russian Wikipedia's published settings.
-Ruwiki is a fork of Russian Wikipedia, so its file starts as a copy. A test scans every Ruwiki version in the
-corpus for `[[Prefix:` prefixes and `<tag` names that its file does not know, and fails on any it finds, so
-an addition on Ruwiki's side shows up from the markup itself. Nothing is fetched at build, run or test time.
+Ruwiki is a fork of Russian Wikipedia, so its file starts as a copy. A private test (D10) scans every Ruwiki
+version in the corpus for `[[Prefix:` prefixes and `<tag` names that its file does not know, and fails on any
+it finds, so an addition on Ruwiki's side shows up from the markup itself. Nothing is fetched at build, run or test time.
 The manifest records each file's hash.
 
 Each text is parsed with the settings of the site it comes from. The site is named on the command line for
@@ -480,36 +483,66 @@ any such fix.
   - 21 pages Ruwiki deleted (`deleted_wiki_2025`);
   - 10 pages whose fork-day parse timed out at 30 s under v0.1.0.
 
-  The three versions of the same article are what the version-comparison tests run on. Where it is stored:
-  see "Open question" below.
+  The three versions of the same article are what the version-comparison tests run on. The corpus is
+  split by site:
+  - **Public part, committed.** The 180 Wikipedia versions of all 105 pages (`wiki_forkday`, `wiki_2025`,
+    `deleted_wiki_2025`): 7.7 MB of markup, about 1.75 MB as zstd Parquet, in
+    `tests/corpus/wikipedia_v1.parquet`, with a `.gitignore` exception. A committed script cuts it from v1 and
+    checks the result's hash.
+    - It keeps `page_id`, `page_title`, `version`, `timestamp`, `wikitext` and `n_chars`.
+    - It replaces the package's `why` column with a `case` column that holds only what tests need (`slow`,
+      `largest`, or empty). The topic labels are the package's, not Wikipedia's, so they stay there.
+    - `tests/corpus/ATTRIBUTION.md`, generated from the corpus manifest, names each page, its revision
+      timestamp and the CC BY-SA 4.0 license.
+  - **Private part, never committed.** The 75 Ruwiki versions (`ruwiki_2025`) stay in the replication
+    package. Tests read them from v1 by path (`WIKITEXT_PRIVATE_CORPUS`, defaulting to the package's
+    `data/results/sources/test_corpus/`) and check the whole file's hash first. When the file is absent,
+    the private tests report themselves as skipped, by name, and never pass silently. So the public
+    repository and GitHub's CI run the public part, and this machine runs both.
+
+  Expected outputs follow the same split. Those of Wikipedia versions are committed. Those of Ruwiki
+  versions are not:
+  - only their sha256 hashes are committed (`tests/expected/private.sha256`), which reveal no text;
+  - the readable copies sit in `tests/private/`, gitignored, and are regenerated locally;
+  - their hand-checked facts sit next to the corpus in the replication package.
 - **Hand-written fixtures** for cases the corpus may lack. The builder first checks the corpus for each, then
   writes a small `.wiki` snippet by hand for any that is missing: a redirect, grouped refs (`group=`),
   list-defined refs, a gallery, nested tables, unclosed templates, tables and tags, deep nesting, an unresolved
   `{{sfn}}`, a ref reused before its definition. These are ours, small, and committed under `tests/fixtures/`
   (`.wiki`, not `.txt`, which is gitignored).
 - **Legacy regression.** The legacy binaries read the fetch format, so a test helper reshapes the corpus.
-  - Every version goes through `parse_single`. The `wiki_2025`/`ruwiki_2025` pairs also go through the
-    two-column `wikitext_parser_rust`. Both outputs go through `clean_parsed`, and then `export_parsed`.
+  - Every version goes through `parse_single`.
+  - The two-column `wikitext_parser_rust` runs on two kinds of pairs. Publicly, `wiki_forkday` with
+    `wiki_2025`, shaped like a `timeseries_diff` file. Privately, `wiki_2025` with `ruwiki_2025`, shaped like a
+    `crossection_diff` file.
+  - Both outputs go through `clean_parsed`, and then `export_parsed`.
   - The expected outputs are generated once, by building tag `v0.1.0` in a separate worktree, with a
     committed script.
   - The test asserts byte equality, with `--timeout 0`. The 10 slow pages are excluded, since the legacy
     placeholder only tests the timer.
-- **Structured expected output.** Every corpus version has a snapshot of its structured output as stable JSON,
-  reviewed on every change. The snapshots catch drift. Evidence that the parse is right comes from these
-  checks, all offline:
+- **Structured expected output.** Every corpus version's structured output is pinned, which catches drift.
+  - Readable JSON snapshots are committed for about 40 public versions (at least one per version label and
+    size tercile, plus a few slow ones), and reviewed on every change.
+  - For every other public version, only the hash of its canonical output is committed. On a mismatch, the
+    test writes the new output to `target/snapshots-new/` for diffing.
+  - The size cap is my call: the five largest pages alone would make the readable snapshots heavy in git.
+
+  Evidence that the parse is right comes from these checks, all offline:
   - **Facts read from the markup.** For about 12 page versions, across both sites and all four version labels,
-    the builder reads the markup and records facts in `facts.toml`: number of refs by kind, reuses and their
-    targets, sfn targets, citations by family, original URLs behind archive links, infobox field count,
-    section titles, external-link hosts. These are counted from the markup by reading, not with the parser,
-    so they check it.
+    the builder reads the markup and records facts: number of refs by kind, reuses and their targets, sfn
+    targets, citations by family, original URLs behind archive links, infobox field count, section titles,
+    external-link hosts. These are counted from the markup by reading, not with the parser, so they check it.
+    Facts for Wikipedia versions go in `tests/facts.toml`, and those for Ruwiki versions in the private part.
   - **Symmetry.** Where two versions are byte-identical, every component table must be identical apart from
-    the labels. The fork-day versions make this a test across sites with real data: a page Ruwiki never
-    edited still has the markup of the fork-day Wikipedia version, so the Ruwiki settings and the Wikipedia
-    settings must parse it the same way.
+    the labels. In public, every Wikipedia version is also parsed with Ruwiki's settings file, and must give
+    the same tables, which tests the two settings files against each other without any Ruwiki markup. In
+    private, the same holds with real data: a page Ruwiki never edited still has the markup of the fork-day
+    Wikipedia version.
   - **Locality.** Between two versions of a page, every component that differs must overlap a region that the
     wikitext diff marks as changed. A component that differs where the markup did not change is a parser
-    artefact: a settings mismatch, or a template recognised on one side only. This runs on the corpus as a
-    test, and on the performance sample as a report the builder reads before release.
+    artefact: a settings mismatch, or a template recognised on one side only. It runs publicly on
+    `wiki_forkday` against `wiki_2025`, and privately on `wiki_2025` against `ruwiki_2025`. It also runs on
+    the performance sample, as a report the builder reads before release.
 - **Robustness test.** Every corpus version is truncated at every 997th character boundary, and separately
   stripped of its closing braces. Each must parse without a panic and within the budget, and yield a status.
 - **Lockfile.** Remove `Cargo.lock` from `.gitignore` and commit it. This is a binary behind a replication
@@ -563,8 +596,16 @@ legacy file stays untouched.
 
 Each milestone ends green on the tests that exist by then.
 
-0. **Lock the baseline.** Commit the lockfile, the corpus access with its hash check, the reshaping helper,
-   the legacy expected outputs generated from `v0.1.0`, and the legacy regression test. Nothing else changes.
+0. **Lock the baseline.** Commit:
+   - the lockfile;
+   - the public corpus file with its cutting script and attribution, and the private corpus access with its
+     hash check and visible skip;
+   - the reshaping helper;
+   - the legacy expected outputs generated from `v0.1.0` (committed for Wikipedia versions, hashes only for
+     Ruwiki versions);
+   - the legacy regression test.
+
+   Nothing else changes.
 1. **Frontend and driver.**
    - Vendor the fork and patch in the step budget.
    - Write the two settings files and the unknown-prefix test.
@@ -606,14 +647,6 @@ Each milestone ends green on the tests that exist by then.
 - Iterative walk or recursion with a large stack.
 - Which page versions get hand-checked facts, within D10.
 
-## Open question
-
-- **Where the test corpus and its expected outputs live.** This repository is public, and the replication
-  package it comes from is private. Committing them (CC BY-SA, with an attribution file from the corpus
-  manifest) makes the parser's tests self-contained, but publishes the sample of heavily edited articles.
-  Keeping them in the replication package means the tests read them by path, check the hash, and skip when
-  the file is absent, so the public repository only tests the hand-written fixtures.
-
 ## Decided by you
 
 - The goals, constraints and the two open questions as set out for this session (the library, and how to
@@ -622,6 +655,8 @@ Each milestone ends green on the tests that exist by then.
   D10.)
 - No data collection: "this is purely about developing the parser we need". Development and tests run on
   stored markup, offline (Why, Constraints, D3, D10).
+- "The test corpus data originating from Wikipedia can also be part of the public parser repo. The Ruwiki
+  parts not." (Constraints, D10, milestone 0.)
 
 ## Calls I made, for you to check
 
@@ -654,6 +689,11 @@ Each milestone ends green on the tests that exist by then.
     registry entries.
 17. The full run over the stored corpus belongs to the replication package. The parser repository measures
     throughput on one row group.
+18. How your corpus split is carried out:
+    - The public file drops the package's topic labels and keeps only `slow` and `largest` markers.
+    - Ruwiki versions are tested from the package by path, and their tests skip visibly when it is absent.
+    - Only the hashes of Ruwiki expected outputs are committed, never their text.
+    - Readable snapshots are kept for about 40 public versions; the rest are pinned by hash.
 
 ## Sources
 
