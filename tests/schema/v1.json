@@ -1,810 +1,197 @@
 {
-  "citations": {
-    "fields": [
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "source_file",
-        "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "row",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "page_id",
-        "nullable": false,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "site",
-        "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "version",
-        "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "column",
-        "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "id",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "start",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "end",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "start_char",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "end_char",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "section_id",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "para_id",
-        "nullable": true,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "para_offset",
-        "nullable": true,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "parent_type",
-        "nullable": true,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "parent_id",
-        "nullable": true,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "fallback",
-        "nullable": false,
-        "type": "Boolean"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "fp",
-        "nullable": false,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "context",
-        "nullable": false,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "ref_id",
-        "nullable": true,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "family",
-        "nullable": false,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "template_id",
-        "nullable": true,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "template_name",
-        "nullable": true,
-        "type": "Utf8"
-      },
-      {
-        "children": [
-          {
-            "children": [
-              {
-                "metadata": [
-                  [
-                    "wikitext_parser.schema_version",
-                    "1.0.0"
-                  ]
-                ],
-                "name": "name",
-                "nullable": false,
-                "type": "Utf8"
-              },
-              {
-                "metadata": [
-                  [
-                    "wikitext_parser.schema_version",
-                    "1.0.0"
-                  ]
-                ],
-                "name": "positional",
-                "nullable": false,
-                "type": "Boolean"
-              },
-              {
-                "metadata": [
-                  [
-                    "wikitext_parser.schema_version",
-                    "1.0.0"
-                  ]
-                ],
-                "name": "value_raw",
-                "nullable": false,
-                "type": "Utf8"
-              },
-              {
-                "metadata": [
-                  [
-                    "wikitext_parser.schema_version",
-                    "1.0.0"
-                  ]
-                ],
-                "name": "value_text",
-                "nullable": false,
-                "type": "Utf8"
-              },
-              {
-                "metadata": [
-                  [
-                    "wikitext_parser.schema_version",
-                    "1.0.0"
-                  ]
-                ],
-                "name": "start",
-                "nullable": false,
-                "type": "Int32"
-              },
-              {
-                "metadata": [
-                  [
-                    "wikitext_parser.schema_version",
-                    "1.0.0"
-                  ]
-                ],
-                "name": "end",
-                "nullable": false,
-                "type": "Int32"
-              }
-            ],
-            "metadata": [
-              [
-                "wikitext_parser.schema_version",
-                "1.0.0"
-              ]
-            ],
-            "name": "element",
-            "nullable": false,
-            "type": "Struct"
-          }
-        ],
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "params",
-        "nullable": false,
-        "type": "List"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "url",
-        "nullable": true,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "archive_url",
-        "nullable": true,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "archive_date_raw",
-        "nullable": true,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "host",
-        "nullable": true,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "registrable_domain",
-        "nullable": true,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "dead_link",
-        "nullable": false,
-        "type": "Boolean"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "title",
-        "nullable": true,
-        "type": "Utf8"
-      },
-      {
-        "children": [
-          {
-            "metadata": [
-              [
-                "wikitext_parser.schema_version",
-                "1.0.0"
-              ]
-            ],
-            "name": "element",
-            "nullable": false,
-            "type": "Utf8"
-          }
-        ],
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "authors",
-        "nullable": false,
-        "type": "List"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "date_raw",
-        "nullable": true,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "year",
-        "nullable": true,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "publisher",
-        "nullable": true,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "work",
-        "nullable": true,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "language",
-        "nullable": true,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "isbn",
-        "nullable": true,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "doi",
-        "nullable": true,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "access_date_raw",
-        "nullable": true,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "harv_key",
-        "nullable": true,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "text",
-        "nullable": true,
-        "type": "Utf8"
-      }
-    ],
+  "pages": {
     "metadata": [
       [
         "wikitext_parser.schema_version",
         "1.0.0"
       ]
-    ]
-  },
-  "pages": {
+    ],
     "fields": [
       {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
         "name": "source_file",
         "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
+        "type": "Dictionary(Int32, Utf8)",
         "metadata": [
           [
             "wikitext_parser.schema_version",
             "1.0.0"
           ]
-        ],
+        ]
+      },
+      {
         "name": "row",
         "nullable": false,
-        "type": "Int32"
-      },
-      {
+        "type": "Int32",
         "metadata": [
           [
             "wikitext_parser.schema_version",
             "1.0.0"
           ]
-        ],
+        ]
+      },
+      {
         "name": "page_id",
         "nullable": false,
-        "type": "Utf8"
-      },
-      {
+        "type": "Utf8",
         "metadata": [
           [
             "wikitext_parser.schema_version",
             "1.0.0"
           ]
-        ],
+        ]
+      },
+      {
         "name": "site",
         "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
+        "type": "Dictionary(Int32, Utf8)",
         "metadata": [
           [
             "wikitext_parser.schema_version",
             "1.0.0"
           ]
-        ],
+        ]
+      },
+      {
         "name": "version",
         "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
+        "type": "Dictionary(Int32, Utf8)",
         "metadata": [
           [
             "wikitext_parser.schema_version",
             "1.0.0"
           ]
-        ],
+        ]
+      },
+      {
         "name": "column",
         "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
+        "type": "Dictionary(Int32, Utf8)",
         "metadata": [
           [
             "wikitext_parser.schema_version",
             "1.0.0"
           ]
-        ],
+        ]
+      },
+      {
         "name": "title",
         "nullable": true,
-        "type": "Utf8"
-      },
-      {
+        "type": "Utf8",
         "metadata": [
           [
             "wikitext_parser.schema_version",
             "1.0.0"
           ]
-        ],
+        ]
+      },
+      {
         "name": "timestamp",
         "nullable": true,
-        "type": "Utf8"
-      },
-      {
+        "type": "Utf8",
         "metadata": [
           [
             "wikitext_parser.schema_version",
             "1.0.0"
           ]
-        ],
+        ]
+      },
+      {
         "name": "status",
         "nullable": false,
-        "type": "Utf8"
-      },
-      {
+        "type": "Utf8",
         "metadata": [
           [
             "wikitext_parser.schema_version",
             "1.0.0"
           ]
-        ],
+        ]
+      },
+      {
         "name": "status_detail",
         "nullable": true,
-        "type": "Utf8"
-      },
-      {
+        "type": "Utf8",
         "metadata": [
           [
             "wikitext_parser.schema_version",
             "1.0.0"
           ]
-        ],
+        ]
+      },
+      {
         "name": "parse_steps",
         "nullable": false,
-        "type": "Int64"
-      },
-      {
+        "type": "Int64",
         "metadata": [
           [
             "wikitext_parser.schema_version",
             "1.0.0"
           ]
-        ],
+        ]
+      },
+      {
         "name": "n_bytes",
         "nullable": false,
-        "type": "Int32"
-      },
-      {
+        "type": "Int32",
         "metadata": [
           [
             "wikitext_parser.schema_version",
             "1.0.0"
           ]
-        ],
+        ]
+      },
+      {
         "name": "n_chars",
         "nullable": false,
-        "type": "Int32"
-      },
-      {
+        "type": "Int32",
         "metadata": [
           [
             "wikitext_parser.schema_version",
             "1.0.0"
           ]
-        ],
+        ]
+      },
+      {
         "name": "n_warnings",
         "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "children": [
-          {
-            "children": [
-              {
-                "metadata": [
-                  [
-                    "wikitext_parser.schema_version",
-                    "1.0.0"
-                  ]
-                ],
-                "name": "kind",
-                "nullable": false,
-                "type": "Utf8"
-              },
-              {
-                "metadata": [
-                  [
-                    "wikitext_parser.schema_version",
-                    "1.0.0"
-                  ]
-                ],
-                "name": "n",
-                "nullable": false,
-                "type": "Int32"
-              }
-            ],
-            "metadata": [
-              [
-                "wikitext_parser.schema_version",
-                "1.0.0"
-              ]
-            ],
-            "name": "element",
-            "nullable": false,
-            "type": "Struct"
-          }
-        ],
+        "type": "Int32",
         "metadata": [
           [
             "wikitext_parser.schema_version",
             "1.0.0"
           ]
-        ],
+        ]
+      },
+      {
         "name": "warning_counts",
         "nullable": false,
-        "type": "List"
-      },
-      {
+        "type": "List",
         "children": [
           {
+            "name": "element",
+            "nullable": false,
+            "type": "Struct",
             "children": [
               {
-                "metadata": [
-                  [
-                    "wikitext_parser.schema_version",
-                    "1.0.0"
-                  ]
-                ],
                 "name": "kind",
                 "nullable": false,
-                "type": "Utf8"
-              },
-              {
+                "type": "Utf8",
                 "metadata": [
                   [
                     "wikitext_parser.schema_version",
                     "1.0.0"
                   ]
-                ],
-                "name": "start",
-                "nullable": false,
-                "type": "Int32"
+                ]
               },
               {
+                "name": "n",
+                "nullable": false,
+                "type": "Int32",
                 "metadata": [
                   [
                     "wikitext_parser.schema_version",
                     "1.0.0"
                   ]
-                ],
-                "name": "end",
-                "nullable": false,
-                "type": "Int32"
+                ]
               }
             ],
             "metadata": [
@@ -812,10 +199,7 @@
                 "wikitext_parser.schema_version",
                 "1.0.0"
               ]
-            ],
-            "name": "element",
-            "nullable": false,
-            "type": "Struct"
+            ]
           }
         ],
         "metadata": [
@@ -823,1606 +207,50 @@
             "wikitext_parser.schema_version",
             "1.0.0"
           ]
-        ],
+        ]
+      },
+      {
         "name": "warnings",
         "nullable": false,
-        "type": "List"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "redirect_target",
-        "nullable": true,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "n_sections",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "n_paragraphs",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "n_templates",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "n_refs",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "n_ref_lists",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "n_citations",
-        "nullable": false,
-        "type": "Int32"
-      }
-    ],
-    "metadata": [
-      [
-        "wikitext_parser.schema_version",
-        "1.0.0"
-      ]
-    ]
-  },
-  "paragraphs": {
-    "fields": [
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "source_file",
-        "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "row",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "page_id",
-        "nullable": false,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "site",
-        "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "version",
-        "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "column",
-        "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "id",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "start",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "end",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "start_char",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "end_char",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "section_id",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "para_id",
-        "nullable": true,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "para_offset",
-        "nullable": true,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "parent_type",
-        "nullable": true,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "parent_id",
-        "nullable": true,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "fallback",
-        "nullable": false,
-        "type": "Boolean"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "fp",
-        "nullable": false,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "kind",
-        "nullable": false,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "list_id",
-        "nullable": true,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "item_depth",
-        "nullable": true,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "text",
-        "nullable": false,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "n_chars",
-        "nullable": false,
-        "type": "Int32"
-      }
-    ],
-    "metadata": [
-      [
-        "wikitext_parser.schema_version",
-        "1.0.0"
-      ]
-    ]
-  },
-  "ref_lists": {
-    "fields": [
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "source_file",
-        "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "row",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "page_id",
-        "nullable": false,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "site",
-        "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "version",
-        "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "column",
-        "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "id",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "start",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "end",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "start_char",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "end_char",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "section_id",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "para_id",
-        "nullable": true,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "para_offset",
-        "nullable": true,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "parent_type",
-        "nullable": true,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "parent_id",
-        "nullable": true,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "fallback",
-        "nullable": false,
-        "type": "Boolean"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "fp",
-        "nullable": false,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "group",
-        "nullable": false,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "kind",
-        "nullable": false,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "template_id",
-        "nullable": true,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "n_entries",
-        "nullable": false,
-        "type": "Int32"
-      }
-    ],
-    "metadata": [
-      [
-        "wikitext_parser.schema_version",
-        "1.0.0"
-      ]
-    ]
-  },
-  "refs": {
-    "fields": [
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "source_file",
-        "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "row",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "page_id",
-        "nullable": false,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "site",
-        "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "version",
-        "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "column",
-        "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "id",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "start",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "end",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "start_char",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "end_char",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "section_id",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "para_id",
-        "nullable": true,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "para_offset",
-        "nullable": true,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "parent_type",
-        "nullable": true,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "parent_id",
-        "nullable": true,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "fallback",
-        "nullable": false,
-        "type": "Boolean"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "fp",
-        "nullable": false,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "kind",
-        "nullable": false,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "name",
-        "nullable": true,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "group",
-        "nullable": false,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "body_raw",
-        "nullable": false,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "body_text",
-        "nullable": false,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "def_ref_id",
-        "nullable": true,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "n_uses",
-        "nullable": true,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "resolved",
-        "nullable": false,
-        "type": "Boolean"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "harv_key",
-        "nullable": true,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "cites_citation_id",
-        "nullable": true,
-        "type": "Int32"
-      }
-    ],
-    "metadata": [
-      [
-        "wikitext_parser.schema_version",
-        "1.0.0"
-      ]
-    ]
-  },
-  "sections": {
-    "fields": [
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "source_file",
-        "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "row",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "page_id",
-        "nullable": false,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "site",
-        "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "version",
-        "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "column",
-        "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "id",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "start",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "end",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "start_char",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "end_char",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "section_id",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "para_id",
-        "nullable": true,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "para_offset",
-        "nullable": true,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "parent_type",
-        "nullable": true,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "parent_id",
-        "nullable": true,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "fallback",
-        "nullable": false,
-        "type": "Boolean"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "fp",
-        "nullable": false,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "level",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "title_text",
-        "nullable": false,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "title_raw",
-        "nullable": false,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "title_norm",
-        "nullable": false,
-        "type": "Utf8"
-      },
-      {
+        "type": "List",
         "children": [
           {
-            "metadata": [
-              [
-                "wikitext_parser.schema_version",
-                "1.0.0"
-              ]
-            ],
             "name": "element",
             "nullable": false,
-            "type": "Utf8"
-          }
-        ],
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "path",
-        "nullable": false,
-        "type": "List"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "parent_section_id",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "heading_start",
-        "nullable": true,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "heading_end",
-        "nullable": true,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "subtree_end",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "role",
-        "nullable": false,
-        "type": "Utf8"
-      }
-    ],
-    "metadata": [
-      [
-        "wikitext_parser.schema_version",
-        "1.0.0"
-      ]
-    ]
-  },
-  "templates": {
-    "fields": [
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "source_file",
-        "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "row",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "page_id",
-        "nullable": false,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "site",
-        "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "version",
-        "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "column",
-        "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "id",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "start",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "end",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "start_char",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "end_char",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "section_id",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "para_id",
-        "nullable": true,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "para_offset",
-        "nullable": true,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "parent_type",
-        "nullable": true,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "parent_id",
-        "nullable": true,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "fallback",
-        "nullable": false,
-        "type": "Boolean"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "fp",
-        "nullable": false,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "name_raw",
-        "nullable": false,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "name",
-        "nullable": false,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "kind",
-        "nullable": false,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "role",
-        "nullable": false,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "looks_like_infobox",
-        "nullable": false,
-        "type": "Boolean"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "depth",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "rendered_len",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "children": [
-          {
+            "type": "Struct",
             "children": [
               {
+                "name": "kind",
+                "nullable": false,
+                "type": "Utf8",
                 "metadata": [
                   [
                     "wikitext_parser.schema_version",
                     "1.0.0"
                   ]
-                ],
-                "name": "name",
-                "nullable": false,
-                "type": "Utf8"
+                ]
               },
               {
-                "metadata": [
-                  [
-                    "wikitext_parser.schema_version",
-                    "1.0.0"
-                  ]
-                ],
-                "name": "positional",
-                "nullable": false,
-                "type": "Boolean"
-              },
-              {
-                "metadata": [
-                  [
-                    "wikitext_parser.schema_version",
-                    "1.0.0"
-                  ]
-                ],
-                "name": "value_raw",
-                "nullable": false,
-                "type": "Utf8"
-              },
-              {
-                "metadata": [
-                  [
-                    "wikitext_parser.schema_version",
-                    "1.0.0"
-                  ]
-                ],
-                "name": "value_text",
-                "nullable": false,
-                "type": "Utf8"
-              },
-              {
-                "metadata": [
-                  [
-                    "wikitext_parser.schema_version",
-                    "1.0.0"
-                  ]
-                ],
                 "name": "start",
                 "nullable": false,
-                "type": "Int32"
-              },
-              {
+                "type": "Int32",
                 "metadata": [
                   [
                     "wikitext_parser.schema_version",
                     "1.0.0"
                   ]
-                ],
+                ]
+              },
+              {
                 "name": "end",
                 "nullable": false,
-                "type": "Int32"
+                "type": "Int32",
+                "metadata": [
+                  [
+                    "wikitext_parser.schema_version",
+                    "1.0.0"
+                  ]
+                ]
               }
             ],
             "metadata": [
@@ -2430,10 +258,7 @@
                 "wikitext_parser.schema_version",
                 "1.0.0"
               ]
-            ],
-            "name": "element",
-            "nullable": false,
-            "type": "Struct"
+            ]
           }
         ],
         "metadata": [
@@ -2441,115 +266,2290 @@
             "wikitext_parser.schema_version",
             "1.0.0"
           ]
-        ],
-        "name": "params",
+        ]
+      },
+      {
+        "name": "redirect_target",
+        "nullable": true,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "n_sections",
         "nullable": false,
-        "type": "List"
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "n_paragraphs",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "n_templates",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "n_refs",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "n_ref_lists",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "n_citations",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
       }
-    ],
-    "metadata": [
-      [
-        "wikitext_parser.schema_version",
-        "1.0.0"
-      ]
     ]
   },
   "timings": {
-    "fields": [
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "source_file",
-        "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "row",
-        "nullable": false,
-        "type": "Int32"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "page_id",
-        "nullable": false,
-        "type": "Utf8"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "site",
-        "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "version",
-        "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "column",
-        "nullable": false,
-        "type": "Dictionary(Int32, Utf8)"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "parse_ms",
-        "nullable": false,
-        "type": "Float64"
-      },
-      {
-        "metadata": [
-          [
-            "wikitext_parser.schema_version",
-            "1.0.0"
-          ]
-        ],
-        "name": "walk_ms",
-        "nullable": false,
-        "type": "Float64"
-      }
-    ],
     "metadata": [
       [
         "wikitext_parser.schema_version",
         "1.0.0"
       ]
+    ],
+    "fields": [
+      {
+        "name": "source_file",
+        "nullable": false,
+        "type": "Dictionary(Int32, Utf8)",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "row",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "page_id",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "site",
+        "nullable": false,
+        "type": "Dictionary(Int32, Utf8)",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "version",
+        "nullable": false,
+        "type": "Dictionary(Int32, Utf8)",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "column",
+        "nullable": false,
+        "type": "Dictionary(Int32, Utf8)",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "parse_ms",
+        "nullable": false,
+        "type": "Float64",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "walk_ms",
+        "nullable": false,
+        "type": "Float64",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      }
+    ]
+  },
+  "sections": {
+    "metadata": [
+      [
+        "wikitext_parser.schema_version",
+        "1.0.0"
+      ]
+    ],
+    "fields": [
+      {
+        "name": "source_file",
+        "nullable": false,
+        "type": "Dictionary(Int32, Utf8)",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "row",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "page_id",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "site",
+        "nullable": false,
+        "type": "Dictionary(Int32, Utf8)",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "version",
+        "nullable": false,
+        "type": "Dictionary(Int32, Utf8)",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "column",
+        "nullable": false,
+        "type": "Dictionary(Int32, Utf8)",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "id",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "start",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "end",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "start_char",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "end_char",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "section_id",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "para_id",
+        "nullable": true,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "para_offset",
+        "nullable": true,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "parent_type",
+        "nullable": true,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "parent_id",
+        "nullable": true,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "fallback",
+        "nullable": false,
+        "type": "Boolean",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "fp",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "level",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "title_text",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "title_raw",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "title_norm",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "path",
+        "nullable": false,
+        "type": "List",
+        "children": [
+          {
+            "name": "element",
+            "nullable": false,
+            "type": "Utf8",
+            "metadata": [
+              [
+                "wikitext_parser.schema_version",
+                "1.0.0"
+              ]
+            ]
+          }
+        ],
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "parent_section_id",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "heading_start",
+        "nullable": true,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "heading_end",
+        "nullable": true,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "subtree_end",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "role",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      }
+    ]
+  },
+  "paragraphs": {
+    "metadata": [
+      [
+        "wikitext_parser.schema_version",
+        "1.0.0"
+      ]
+    ],
+    "fields": [
+      {
+        "name": "source_file",
+        "nullable": false,
+        "type": "Dictionary(Int32, Utf8)",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "row",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "page_id",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "site",
+        "nullable": false,
+        "type": "Dictionary(Int32, Utf8)",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "version",
+        "nullable": false,
+        "type": "Dictionary(Int32, Utf8)",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "column",
+        "nullable": false,
+        "type": "Dictionary(Int32, Utf8)",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "id",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "start",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "end",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "start_char",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "end_char",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "section_id",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "para_id",
+        "nullable": true,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "para_offset",
+        "nullable": true,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "parent_type",
+        "nullable": true,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "parent_id",
+        "nullable": true,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "fallback",
+        "nullable": false,
+        "type": "Boolean",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "fp",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "kind",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "list_id",
+        "nullable": true,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "item_depth",
+        "nullable": true,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "text",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "n_chars",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      }
+    ]
+  },
+  "templates": {
+    "metadata": [
+      [
+        "wikitext_parser.schema_version",
+        "1.0.0"
+      ]
+    ],
+    "fields": [
+      {
+        "name": "source_file",
+        "nullable": false,
+        "type": "Dictionary(Int32, Utf8)",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "row",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "page_id",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "site",
+        "nullable": false,
+        "type": "Dictionary(Int32, Utf8)",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "version",
+        "nullable": false,
+        "type": "Dictionary(Int32, Utf8)",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "column",
+        "nullable": false,
+        "type": "Dictionary(Int32, Utf8)",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "id",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "start",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "end",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "start_char",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "end_char",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "section_id",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "para_id",
+        "nullable": true,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "para_offset",
+        "nullable": true,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "parent_type",
+        "nullable": true,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "parent_id",
+        "nullable": true,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "fallback",
+        "nullable": false,
+        "type": "Boolean",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "fp",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "name_raw",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "name",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "kind",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "role",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "looks_like_infobox",
+        "nullable": false,
+        "type": "Boolean",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "depth",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "rendered_len",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "params",
+        "nullable": false,
+        "type": "List",
+        "children": [
+          {
+            "name": "element",
+            "nullable": false,
+            "type": "Struct",
+            "children": [
+              {
+                "name": "name",
+                "nullable": false,
+                "type": "Utf8",
+                "metadata": [
+                  [
+                    "wikitext_parser.schema_version",
+                    "1.0.0"
+                  ]
+                ]
+              },
+              {
+                "name": "positional",
+                "nullable": false,
+                "type": "Boolean",
+                "metadata": [
+                  [
+                    "wikitext_parser.schema_version",
+                    "1.0.0"
+                  ]
+                ]
+              },
+              {
+                "name": "value_raw",
+                "nullable": false,
+                "type": "Utf8",
+                "metadata": [
+                  [
+                    "wikitext_parser.schema_version",
+                    "1.0.0"
+                  ]
+                ]
+              },
+              {
+                "name": "value_text",
+                "nullable": false,
+                "type": "Utf8",
+                "metadata": [
+                  [
+                    "wikitext_parser.schema_version",
+                    "1.0.0"
+                  ]
+                ]
+              },
+              {
+                "name": "start",
+                "nullable": false,
+                "type": "Int32",
+                "metadata": [
+                  [
+                    "wikitext_parser.schema_version",
+                    "1.0.0"
+                  ]
+                ]
+              },
+              {
+                "name": "end",
+                "nullable": false,
+                "type": "Int32",
+                "metadata": [
+                  [
+                    "wikitext_parser.schema_version",
+                    "1.0.0"
+                  ]
+                ]
+              }
+            ],
+            "metadata": [
+              [
+                "wikitext_parser.schema_version",
+                "1.0.0"
+              ]
+            ]
+          }
+        ],
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      }
+    ]
+  },
+  "refs": {
+    "metadata": [
+      [
+        "wikitext_parser.schema_version",
+        "1.0.0"
+      ]
+    ],
+    "fields": [
+      {
+        "name": "source_file",
+        "nullable": false,
+        "type": "Dictionary(Int32, Utf8)",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "row",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "page_id",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "site",
+        "nullable": false,
+        "type": "Dictionary(Int32, Utf8)",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "version",
+        "nullable": false,
+        "type": "Dictionary(Int32, Utf8)",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "column",
+        "nullable": false,
+        "type": "Dictionary(Int32, Utf8)",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "id",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "start",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "end",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "start_char",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "end_char",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "section_id",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "para_id",
+        "nullable": true,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "para_offset",
+        "nullable": true,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "parent_type",
+        "nullable": true,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "parent_id",
+        "nullable": true,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "fallback",
+        "nullable": false,
+        "type": "Boolean",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "fp",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "kind",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "name",
+        "nullable": true,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "group",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "body_raw",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "body_text",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "def_ref_id",
+        "nullable": true,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "n_uses",
+        "nullable": true,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "resolved",
+        "nullable": false,
+        "type": "Boolean",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "harv_key",
+        "nullable": true,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "cites_citation_id",
+        "nullable": true,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      }
+    ]
+  },
+  "ref_lists": {
+    "metadata": [
+      [
+        "wikitext_parser.schema_version",
+        "1.0.0"
+      ]
+    ],
+    "fields": [
+      {
+        "name": "source_file",
+        "nullable": false,
+        "type": "Dictionary(Int32, Utf8)",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "row",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "page_id",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "site",
+        "nullable": false,
+        "type": "Dictionary(Int32, Utf8)",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "version",
+        "nullable": false,
+        "type": "Dictionary(Int32, Utf8)",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "column",
+        "nullable": false,
+        "type": "Dictionary(Int32, Utf8)",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "id",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "start",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "end",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "start_char",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "end_char",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "section_id",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "para_id",
+        "nullable": true,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "para_offset",
+        "nullable": true,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "parent_type",
+        "nullable": true,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "parent_id",
+        "nullable": true,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "fallback",
+        "nullable": false,
+        "type": "Boolean",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "fp",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "group",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "kind",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "template_id",
+        "nullable": true,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "n_entries",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      }
+    ]
+  },
+  "citations": {
+    "metadata": [
+      [
+        "wikitext_parser.schema_version",
+        "1.0.0"
+      ]
+    ],
+    "fields": [
+      {
+        "name": "source_file",
+        "nullable": false,
+        "type": "Dictionary(Int32, Utf8)",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "row",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "page_id",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "site",
+        "nullable": false,
+        "type": "Dictionary(Int32, Utf8)",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "version",
+        "nullable": false,
+        "type": "Dictionary(Int32, Utf8)",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "column",
+        "nullable": false,
+        "type": "Dictionary(Int32, Utf8)",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "id",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "start",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "end",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "start_char",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "end_char",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "section_id",
+        "nullable": false,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "para_id",
+        "nullable": true,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "para_offset",
+        "nullable": true,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "parent_type",
+        "nullable": true,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "parent_id",
+        "nullable": true,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "fallback",
+        "nullable": false,
+        "type": "Boolean",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "fp",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "context",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "ref_id",
+        "nullable": true,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "family",
+        "nullable": false,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "template_id",
+        "nullable": true,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "template_name",
+        "nullable": true,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "params",
+        "nullable": false,
+        "type": "List",
+        "children": [
+          {
+            "name": "element",
+            "nullable": false,
+            "type": "Struct",
+            "children": [
+              {
+                "name": "name",
+                "nullable": false,
+                "type": "Utf8",
+                "metadata": [
+                  [
+                    "wikitext_parser.schema_version",
+                    "1.0.0"
+                  ]
+                ]
+              },
+              {
+                "name": "positional",
+                "nullable": false,
+                "type": "Boolean",
+                "metadata": [
+                  [
+                    "wikitext_parser.schema_version",
+                    "1.0.0"
+                  ]
+                ]
+              },
+              {
+                "name": "value_raw",
+                "nullable": false,
+                "type": "Utf8",
+                "metadata": [
+                  [
+                    "wikitext_parser.schema_version",
+                    "1.0.0"
+                  ]
+                ]
+              },
+              {
+                "name": "value_text",
+                "nullable": false,
+                "type": "Utf8",
+                "metadata": [
+                  [
+                    "wikitext_parser.schema_version",
+                    "1.0.0"
+                  ]
+                ]
+              },
+              {
+                "name": "start",
+                "nullable": false,
+                "type": "Int32",
+                "metadata": [
+                  [
+                    "wikitext_parser.schema_version",
+                    "1.0.0"
+                  ]
+                ]
+              },
+              {
+                "name": "end",
+                "nullable": false,
+                "type": "Int32",
+                "metadata": [
+                  [
+                    "wikitext_parser.schema_version",
+                    "1.0.0"
+                  ]
+                ]
+              }
+            ],
+            "metadata": [
+              [
+                "wikitext_parser.schema_version",
+                "1.0.0"
+              ]
+            ]
+          }
+        ],
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "url",
+        "nullable": true,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "archive_url",
+        "nullable": true,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "archive_date_raw",
+        "nullable": true,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "host",
+        "nullable": true,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "registrable_domain",
+        "nullable": true,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "dead_link",
+        "nullable": false,
+        "type": "Boolean",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "title",
+        "nullable": true,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "authors",
+        "nullable": false,
+        "type": "List",
+        "children": [
+          {
+            "name": "element",
+            "nullable": false,
+            "type": "Utf8",
+            "metadata": [
+              [
+                "wikitext_parser.schema_version",
+                "1.0.0"
+              ]
+            ]
+          }
+        ],
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "date_raw",
+        "nullable": true,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "year",
+        "nullable": true,
+        "type": "Int32",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "publisher",
+        "nullable": true,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "work",
+        "nullable": true,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "language",
+        "nullable": true,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "isbn",
+        "nullable": true,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "doi",
+        "nullable": true,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "access_date_raw",
+        "nullable": true,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "harv_key",
+        "nullable": true,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      },
+      {
+        "name": "text",
+        "nullable": true,
+        "type": "Utf8",
+        "metadata": [
+          [
+            "wikitext_parser.schema_version",
+            "1.0.0"
+          ]
+        ]
+      }
     ]
   }
 }
