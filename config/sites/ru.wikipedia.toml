@@ -1,0 +1,263 @@
+# Site settings of Russian Wikipedia (read by src/components/settings.rs). Generated once from MediaWiki source code (see `source`);
+# edit by hand afterwards. Nothing is fetched at build, run or test time.
+
+site = "wikipedia"
+
+source = """
+MediaWiki core, commit 8fb32d2ba82992021a8c5aa68c2e9ef94db85534 (master, 2026-10-27), read as source code on GitHub:
+ https://github.com/wikimedia/mediawiki/blob/8fb32d2ba82992021a8c5aa68c2e9ef94db85534/languages/messages/MessagesRu.php (namespace names and aliases, link trail, magic words, redirect words, image options),
+ .../languages/messages/MessagesEn.php (English fallbacks of magic words and image options),
+ .../includes/Parser/Sanitizer.php (html_tags: htmlpairsStatic, htmlsingle, htmlnest, tabletags, listtags),
+ .../includes/Parser/CoreParserFunctions.php (parser function names).
+operations/mediawiki-config, commit 59d26e0750e072d5c6318319bcd84a36e8fe2f41 (master, 2026-10-27):
+ https://github.com/wikimedia/operations-mediawiki-config/blob/59d26e0750e072d5c6318319bcd84a36e8fe2f41/wmf-config/core-Namespaces.php (ruwiki extra namespaces 100-107 and aliases: wgExtraNamespaces, wgNamespaceAliases),
+ .../wmf-config/interwiki.php (language prefixes from __list:_wiki, Wikimedia and global interwiki prefixes from __global:* and __list:ruwiki),
+ .../wmf-config/InitialiseSettings.php (ruwiki Incubator namespace),
+ https://github.com/wikimedia/operations-mediawiki-config/blob/59d26e0750e072d5c6318319bcd84a36e8fe2f41/langlist.
+Not read from those files, written from knowledge of the extensions deployed on Wikimedia wikis: the namespaces of Scribunto (828/829), Gadgets (2300-2303) and TimedText (710/711) with their Russian names, and the extension tags templatestyles, langconvert, phonos, page-collection, plus the ParserFunctions, Scribunto and Wikibase parser function names. Nothing was fetched from any wiki.
+"""
+
+# MessagesRu.php: $linkTrail = /^([a-zабвгдеёжзийклмнопрстуфхцчшщъыьэюя]+)(.*)$/sDu ; the parser takes the characters of the class.
+link_trail = "abcdefghijklmnopqrstuvwxyzабвгдеёжзийклмнопрстуфхцчшщъыьэюя"
+
+# Sanitizer.php (htmlpairsStatic, htmlsingle, htmlnest, tabletags, listtags): the HTML tags MediaWiki allows in wikitext.
+html_tags = [
+    "b", "bdi", "del", "i", "ins", "u", "font", "big", "small", "sub", "sup", "h1", "h2", "h3", "h4", "h5",
+    "h6", "cite", "code", "em", "s", "strike", "strong", "tt", "var", "div", "center", "blockquote", "ol",
+    "ul", "dl", "table", "caption", "pre", "ruby", "rb", "rp", "rt", "rtc", "p", "span", "abbr", "dfn", "kbd",
+    "samp", "data", "time", "mark", "br", "wbr", "hr", "li", "dt", "dd", "meta", "link", "tr", "td", "th",
+    "q", "bdo",
+]
+
+# Extension tags on Wikimedia wikis (the parse-wiki-text default list plus templatestyles, langconvert, phonos, page-collection).
+extension_tags = [
+    "categorytree", "ce", "charinsert", "chem", "gallery", "graph", "hiero", "imagemap", "includeonly",
+    "indicator", "inputbox", "mapframe", "maplink", "math", "noinclude", "nowiki", "onlyinclude", "poem",
+    "pre", "ref", "references", "score", "section", "source", "syntaxhighlight", "templatedata", "timeline",
+    "templatestyles", "langconvert", "phonos", "page-collection",
+]
+
+# Behaviour switches, the names between __ and __ (MessagesRu.php and MessagesEn.php).
+magic_words = [
+    "EXPECTSHORTPAGE", "EXPECTUNUSEDCATEGORY", "EXPECTUNUSEDTEMPLATE", "ОБЯЗАТЕЛЬНОЕ_ОГЛАВЛЕНИЕ", "ОБЯЗ_ОГЛ",
+    "FORCETOC", "СКРЫТАЯ_КАТЕГОРИЯ", "HIDDENCAT", "ИНДЕКС", "INDEX", "ССЫЛКА_НА_НОВЫЙ_РАЗДЕЛ",
+    "NEWSECTIONLINK", "БЕЗ_ПРЕОБРАЗОВАНИЯ_ТЕКСТА", "NOCONTENTCONVERT", "NOCC", "БЕЗ_РЕДАКТИРОВАНИЯ_РАЗДЕЛА",
+    "NOEDITSECTION", "БЕЗ_ГАЛЕРЕИ", "NOGALLERY", "БЕЗ_ИНДЕКСА", "NOINDEX", "БЕЗ_ССЫЛКИ_НА_НОВЫЙ_РАЗДЕЛ",
+    "NONEWSECTIONLINK", "БЕЗ_ПРЕОБРАЗОВАНИЯ_ЗАГОЛОВКА", "NOTITLECONVERT", "NOTC", "БЕЗ_ОГЛАВЛЕНИЯ", "БЕЗ_ОГЛ",
+    "NOTOC", "СТАТИЧЕСКОЕ_ПЕРЕНАПРАВЛЕНИЕ", "STATICREDIRECT", "ОГЛАВЛЕНИЕ", "ОГЛ", "TOC",
+]
+
+# Redirect words without the leading # (MessagesRu.php, "redirect"). Longest first, because the parser stores them in a trie.
+redirect_magic_words = [
+    "перенаправление", "перенапр", "REDIRECT",
+]
+
+# CoreParserFunctions / wgUrlProtocols.
+protocols = [
+    "//", "bitcoin:", "ftp://", "ftps://", "geo:", "git://", "gopher://", "http://", "https://", "irc://",
+    "ircs://", "magnet:", "mailto:", "mms://", "news:", "nntp://", "redis://", "sftp://", "sip:", "sips:",
+    "sms:", "ssh://", "svn://", "tel:", "telnet://", "urn:", "worldwind://", "xmpp:",
+]
+
+# Image options (img_* in MessagesRu.php and MessagesEn.php). Patterns hold $1 for the value; "$1px" and "$1пкс" take a width, "x120px" a height.
+image_options = [
+    "основание", "baseline", "граница", "border", "снизу", "bottom", "центр", "center", "centre", "обрамить",
+    "frame", "framed", "enframed", "безрамки", "frameless", "слева", "left", "посередине", "middle", "без",
+    "none", "справа", "right", "под", "sub", "над", "super", "sup", "текст-снизу", "text-bottom",
+    "текст-сверху", "text-top", "мини", "миниатюра", "thumb", "thumbnail", "сверху", "top", "сверхусправа",
+    "upright",
+]
+
+image_option_patterns = [
+    "альт=$1", "alt=$1", "class=$1", "lang=$1", "ссылка=$1", "link=$1", "мини=$1", "миниатюра=$1",
+    "thumbnail=$1", "thumb=$1", "страница=$1", "страница $1", "page=$1", "page $1", "сверхусправа=$1",
+    "сверхусправа $1", "upright=$1", "upright $1", "$1пкс", "$1px",
+]
+
+# Magic variables ({{PAGENAME}}) with their Russian aliases.
+variables = [
+    "ПУТЬ_К_СТАТЬЕ", "ARTICLEPATH", "ОСНОВА_НАЗВАНИЯ_СТРАНИЦЫ", "BASEPAGENAME", "ОСНОВА_НАЗВАНИЯ_СТРАНИЦЫ_2",
+    "BASEPAGENAMEE", "CASCADINGSOURCES", "ЯЗЫК_СОДЕРЖАНИЯ", "CONTENTLANGUAGE", "CONTENTLANG", "ТЕКУЩИЙ_ДЕНЬ",
+    "CURRENTDAY", "ТЕКУЩИЙ_ДЕНЬ_2", "CURRENTDAY2", "НАЗВАНИЕ_ТЕКУЩЕГО_ДНЯ", "CURRENTDAYNAME",
+    "ТЕКУЩИЙ_ДЕНЬ_НЕДЕЛИ", "CURRENTDOW", "ТЕКУЩИЙ_ЧАС", "CURRENTHOUR", "ТЕКУЩИЙ_МЕСЯЦ", "ТЕКУЩИЙ_МЕСЯЦ_2",
+    "CURRENTMONTH", "CURRENTMONTH2", "ТЕКУЩИЙ_МЕСЯЦ_1", "CURRENTMONTH1", "НАЗВАНИЕ_ТЕКУЩЕГО_МЕСЯЦА_АБР",
+    "CURRENTMONTHABBREV", "НАЗВАНИЕ_ТЕКУЩЕГО_МЕСЯЦА", "CURRENTMONTHNAME", "НАЗВАНИЕ_ТЕКУЩЕГО_МЕСЯЦА_РОД",
+    "CURRENTMONTHNAMEGEN", "ТЕКУЩЕЕ_ВРЕМЯ", "CURRENTTIME", "ОТМЕТКА_ТЕКУЩЕГО_ВРЕМЕНИ", "CURRENTTIMESTAMP",
+    "ТЕКУЩАЯ_ВЕРСИЯ", "CURRENTVERSION", "ТЕКУЩАЯ_НЕДЕЛЯ", "CURRENTWEEK", "ТЕКУЩИЙ_ГОД", "CURRENTYEAR",
+    "НАПРАВЛЕНИЕ_ПИСЬМА", "DIRECTIONMARK", "DIRMARK", "ПОЛНОЕ_НАЗВАНИЕ_СТРАНИЦЫ", "FULLPAGENAME",
+    "ПОЛНОЕ_НАЗВАНИЕ_СТРАНИЦЫ_2", "FULLPAGENAMEE", "МЕСТНЫЙ_ДЕНЬ", "LOCALDAY", "МЕСТНЫЙ_ДЕНЬ_2", "LOCALDAY2",
+    "НАЗВАНИЕ_МЕСТНОГО_ДНЯ", "LOCALDAYNAME", "МЕСТНЫЙ_ДЕНЬ_НЕДЕЛИ", "LOCALDOW", "МЕСТНЫЙ_ЧАС", "LOCALHOUR",
+    "МЕСТНЫЙ_МЕСЯЦ", "МЕСТНЫЙ_МЕСЯЦ_2", "LOCALMONTH", "LOCALMONTH2", "МЕСТНЫЙ_МЕСЯЦ_1", "LOCALMONTH1",
+    "НАЗВАНИЕ_МЕСТНОГО_МЕСЯЦА_АБР", "LOCALMONTHABBREV", "НАЗВАНИЕ_МЕСТНОГО_МЕСЯЦА", "LOCALMONTHNAME",
+    "НАЗВАНИЕ_МЕСТНОГО_МЕСЯЦА_РОД", "LOCALMONTHNAMEGEN", "МЕСТНОЕ_ВРЕМЯ", "LOCALTIME",
+    "ОТМЕТКА_МЕСТНОГО_ВРЕМЕНИ", "LOCALTIMESTAMP", "МЕСТНАЯ_НЕДЕЛЯ", "LOCALWEEK", "МЕСТНЫЙ_ГОД", "LOCALYEAR",
+    "ПРОСТРАНСТВО_ИМЁН", "NAMESPACE", "ПРОСТРАНСТВО_ИМЁН_2", "NAMESPACEE", "НОМЕР_ПРОСТРАНСТВА_ИМЁН",
+    "NAMESPACENUMBER", "КОЛИЧЕСТВО_АКТИВНЫХ_УЧАСТНИКОВ", "NUMBEROFACTIVEUSERS", "КОЛИЧЕСТВО_АДМИНИСТРАТОРОВ",
+    "NUMBEROFADMINS", "КОЛИЧЕСТВО_СТАТЕЙ", "NUMBEROFARTICLES", "КОЛИЧЕСТВО_ПРАВОК", "NUMBEROFEDITS",
+    "КОЛИЧЕСТВО_ФАЙЛОВ", "NUMBEROFFILES", "КОЛИЧЕСТВО_СТРАНИЦ", "NUMBEROFPAGES", "КОЛИЧЕСТВО_УЧАСТНИКОВ",
+    "NUMBEROFUSERS", "ИДЕНТИФИКАТОР_СТРАНИЦЫ", "PAGEID", "PAGELANGUAGE", "НАЗВАНИЕ_СТРАНИЦЫ", "PAGENAME",
+    "НАЗВАНИЕ_СТРАНИЦЫ_2", "PAGENAMEE", "ДЕНЬ_ВЕРСИИ", "REVISIONDAY", "ДЕНЬ_ВЕРСИИ_2", "REVISIONDAY2",
+    "ИД_ВЕРСИИ", "REVISIONID", "МЕСЯЦ_ВЕРСИИ", "REVISIONMONTH", "МЕСЯЦ_ВЕРСИИ_1", "REVISIONMONTH1",
+    "REVISIONSIZE", "ОТМЕТКА_ВРЕМЕНИ_ВЕРСИИ", "REVISIONTIMESTAMP", "ВЕРСИЯ_УЧАСТНИКА", "REVISIONUSER",
+    "ГОД_ВЕРСИИ", "REVISIONYEAR", "ROOTPAGENAME", "ROOTPAGENAMEE", "ПУТЬ_К_СКРИПТУ", "SCRIPTPATH", "СЕРВЕР",
+    "SERVER", "НАЗВАНИЕ_СЕРВЕРА", "SERVERNAME", "НАЗВАНИЕ_САЙТА", "SITENAME", "ПУТЬ_К_СТИЛЮ", "STYLEPATH",
+    "НАЗВАНИЕ_СТРАНИЦЫ_СТАТЬИ", "SUBJECTPAGENAME", "ARTICLEPAGENAME", "НАЗВАНИЕ_СТРАНИЦЫ_СТАТЬИ_2",
+    "SUBJECTPAGENAMEE", "ARTICLEPAGENAMEE", "ПРОСТРАНСТВО_СТАТЕЙ", "SUBJECTSPACE", "ARTICLESPACE",
+    "ПРОСТРАНСТВО_СТАТЕЙ_2", "SUBJECTSPACEE", "ARTICLESPACEE", "НАЗВАНИЕ_ПОДСТРАНИЦЫ", "SUBPAGENAME",
+    "НАЗВАНИЕ_ПОДСТРАНИЦЫ_2", "SUBPAGENAMEE", "НАЗВАНИЕ_СТРАНИЦЫ_ОБСУЖДЕНИЯ", "TALKPAGENAME",
+    "НАЗВАНИЕ_СТРАНИЦЫ_ОБСУЖДЕНИЯ_2", "TALKPAGENAMEE", "ПРОСТРАНСТВО_ОБСУЖДЕНИЙ", "TALKSPACE",
+    "ПРОСТРАНСТВО_ОБСУЖДЕНИЙ_2", "TALKSPACEE", "USERLANGUAGE",
+]
+
+# Parser function words before the colon ({{lc:x}}, {{#if:x}}), with their Russian aliases.
+parser_functions = [
+    "КОДИРОВАТЬ_МЕТКУ", "ANCHORENCODE", "ОСНОВА_НАЗВАНИЯ_СТРАНИЦЫ", "BASEPAGENAME",
+    "ОСНОВА_НАЗВАНИЯ_СТРАНИЦЫ_2", "BASEPAGENAMEE", "#bcp47", "BIDI", "CANONICALURL", "CANONICALURLE",
+    "CASCADINGSOURCES", "CATEGORYSORT", "#contentmodel", "СОРТИРОВКА_ПО_УМОЛЧАНИЮ", "КЛЮЧ_СОРТИРОВКИ",
+    "DEFAULTSORT", "DEFAULTSORTKEY", "DEFAULTCATEGORYSORT", "#dir", "ПОКАЗАТЬ_ЗАГОЛОВОК", "DISPLAYTITLE",
+    "ПУТЬ_К_ФАЙЛУ", "FILEPATH", "#FORMAL", "форматдаты", "formatdate", "dateformat", "ФОРМАТИРОВАТЬ_ЧИСЛО",
+    "FORMATNUM", "ПОЛНОЕ_НАЗВАНИЕ_СТРАНИЦЫ", "FULLPAGENAME", "ПОЛНОЕ_НАЗВАНИЕ_СТРАНИЦЫ_2", "FULLPAGENAMEE",
+    "ПОЛНЫЙ_АДРЕС", "FULLURL", "ПОЛНЫЙ_АДРЕС_2", "FULLURLE", "ПОЛ", "GENDER", "ПАДЕЖ", "GRAMMAR", "ВНУТР",
+    "INT", "#interlanguagelink", "#interwikilink", "#isbn", "#ЯЗЫК", "#LANGUAGE", "МАЛЕНЬКИМИ_БУКВАМИ", "LC",
+    "ПЕРВАЯ_БУКВА_МАЛЕНЬКАЯ", "LCFIRST", "ЛОКАЛЬНЫЙ_АДРЕС", "LOCALURL", "ЛОКАЛЬНЫЙ_АДРЕС_2", "LOCALURLE",
+    "СООБЩЕНИЕ", "СООБЩ", "MSG", "СООБЩ_БЕЗ_ВИКИ", "MSGNW", "ПРОСТРАНСТВО_ИМЁН", "NAMESPACE",
+    "ПРОСТРАНСТВО_ИМЁН_2", "NAMESPACEE", "НОМЕР_ПРОСТРАНСТВА_ИМЁН", "NAMESPACENUMBER", "ПИ", "NS", "ПИК",
+    "NSE", "ЧИСЛО_В_ГРУППЕ", "NUMBERINGROUP", "NUMINGROUP", "КОЛИЧЕСТВО_АКТИВНЫХ_УЧАСТНИКОВ",
+    "NUMBEROFACTIVEUSERS", "КОЛИЧЕСТВО_АДМИНИСТРАТОРОВ", "NUMBEROFADMINS", "КОЛИЧЕСТВО_СТАТЕЙ",
+    "NUMBEROFARTICLES", "КОЛИЧЕСТВО_ПРАВОК", "NUMBEROFEDITS", "КОЛИЧЕСТВО_ФАЙЛОВ", "NUMBEROFFILES",
+    "КОЛИЧЕСТВО_СТРАНИЦ", "NUMBEROFPAGES", "КОЛИЧЕСТВО_УЧАСТНИКОВ", "NUMBEROFUSERS", "ЗАПОЛНИТЬ_СЛЕВА",
+    "PADLEFT", "ЗАПОЛНИТЬ_СПРАВА", "PADRIGHT", "ИДЕНТИФИКАТОР_СТРАНИЦЫ", "PAGEID", "НАЗВАНИЕ_СТРАНИЦЫ",
+    "PAGENAME", "НАЗВАНИЕ_СТРАНИЦЫ_2", "PAGENAMEE", "СТРАНИЦ_В_КАТЕГОРИИ", "PAGESINCATEGORY", "PAGESINCAT",
+    "СТРАНИЦ_В_ПРОСТРАНСТВЕ_ИМЁН", "PAGESINNAMESPACE", "PAGESINNS", "РАЗМЕР_СТРАНИЦЫ", "PAGESIZE",
+    "МНОЖЕСТВЕННОЕ_ЧИСЛО", "PLURAL", "PROTECTIONEXPIRY", "УРОВЕНЬ_ЗАЩИТЫ", "PROTECTIONLEVEL", "НЕОБРАБ",
+    "RAW", "ДЕНЬ_ВЕРСИИ", "REVISIONDAY", "ДЕНЬ_ВЕРСИИ_2", "REVISIONDAY2", "ИД_ВЕРСИИ", "REVISIONID",
+    "МЕСЯЦ_ВЕРСИИ", "REVISIONMONTH", "МЕСЯЦ_ВЕРСИИ_1", "REVISIONMONTH1", "ОТМЕТКА_ВРЕМЕНИ_ВЕРСИИ",
+    "REVISIONTIMESTAMP", "ВЕРСИЯ_УЧАСТНИКА", "REVISIONUSER", "ГОД_ВЕРСИИ", "REVISIONYEAR", "ROOTPAGENAME",
+    "ROOTPAGENAMEE", "ЗАЩПОДСТ", "SAFESUBST", "служебная", "special", "speciale", "НАЗВАНИЕ_СТРАНИЦЫ_СТАТЬИ",
+    "SUBJECTPAGENAME", "ARTICLEPAGENAME", "НАЗВАНИЕ_СТРАНИЦЫ_СТАТЬИ_2", "SUBJECTPAGENAMEE",
+    "ARTICLEPAGENAMEE", "ПРОСТРАНСТВО_СТАТЕЙ", "SUBJECTSPACE", "ARTICLESPACE", "ПРОСТРАНСТВО_СТАТЕЙ_2",
+    "SUBJECTSPACEE", "ARTICLESPACEE", "НАЗВАНИЕ_ПОДСТРАНИЦЫ", "SUBPAGENAME", "НАЗВАНИЕ_ПОДСТРАНИЦЫ_2",
+    "SUBPAGENAMEE", "ПОДСТАНОВКА", "ПОДСТ", "SUBST", "метка", "тег", "тэг", "tag",
+    "НАЗВАНИЕ_СТРАНИЦЫ_ОБСУЖДЕНИЯ", "TALKPAGENAME", "НАЗВАНИЕ_СТРАНИЦЫ_ОБСУЖДЕНИЯ_2", "TALKPAGENAMEE",
+    "ПРОСТРАНСТВО_ОБСУЖДЕНИЙ", "TALKSPACE", "ПРОСТРАНСТВО_ОБСУЖДЕНИЙ_2", "TALKSPACEE", "БОЛЬШИМИ_БУКВАМИ",
+    "UC", "ПЕРВАЯ_БУКВА_БОЛЬШАЯ", "UCFIRST", "ЗАКОДИРОВАННЫЙ_АДРЕС", "URLENCODE", "#if", "#ifeq", "#iferror",
+    "#ifexpr", "#ifexist", "#switch", "#expr", "#time", "#timel", "#rel2abs", "#titleparts", "#invoke",
+    "#tag", "#language", "#special", "#speciale", "#formatdate", "#babel", "#property", "#statements",
+    "#coordinates", "#lst", "#lsth", "#lstx", "#section", "#section-x", "#section-h", "#categorytree",
+    "#assessment", "#useboxprofile", "#mentionsprofile", "#related",
+]
+
+# langlist and interwiki.php `__list:_wiki`: the language codes MediaWiki treats as interlanguage prefixes.
+language_prefixes = [
+    "aa", "ab", "ace", "ady", "af", "ak", "als", "alt", "am", "ami", "an", "ang", "ann", "anp", "ar", "arc",
+    "ary", "arz", "as", "ast", "atj", "av", "avk", "awa", "ay", "az", "azb", "ba", "ban", "bar", "bat-smg",
+    "bbc", "bcl", "bdr", "be", "be-tarask", "be-x-old", "bew", "bg", "bh", "bi", "bjn", "blk", "bm", "bn",
+    "bo", "bol", "bpy", "br", "bs", "btm", "bug", "bxr", "ca", "cbk-zam", "cdo", "ce", "ceb", "ch", "cho",
+    "chr", "chy", "ckb", "co", "cr", "crh", "cs", "csb", "cu", "cv", "cy", "da", "dag", "de", "dga", "din",
+    "diq", "dsb", "dtp", "dty", "dv", "dz", "ee", "el", "eml", "en", "eo", "es", "et", "eu", "ext", "fa",
+    "fat", "ff", "fi", "fiu-vro", "fj", "fo", "fon", "fr", "frp", "frr", "fur", "fy", "ga", "gag", "gan",
+    "gcr", "gd", "gl", "glk", "gn", "gom", "gor", "got", "gpe", "gsw", "gu", "guc", "gur", "guw", "gv", "ha",
+    "hak", "haw", "he", "hi", "hif", "ho", "hr", "hsb", "ht", "hu", "hy", "hyw", "hz", "ia", "iba", "id",
+    "ie", "ig", "igl", "ii", "ik", "ilo", "inh", "io", "is", "isv", "it", "iu", "ja", "jam", "jbo", "jv",
+    "ka", "kaa", "kab", "kai", "kaj", "kbd", "kbp", "kcg", "kg", "kge", "ki", "kj", "kk", "kl", "km", "kn",
+    "knc", "ko", "koi", "kr", "krc", "ks", "ksh", "ku", "kus", "kv", "kw", "ky", "la", "lad", "lb", "lbe",
+    "lez", "lfn", "lg", "li", "lij", "lld", "lmo", "ln", "lo", "lrc", "lt", "ltg", "lv", "lzh", "mad", "mag",
+    "mai", "map-bms", "mdf", "mg", "mh", "mhr", "mi", "min", "mk", "ml", "mn", "mni", "mnw", "mo", "mos",
+    "mr", "mrj", "ms", "mt", "mus", "mwl", "my", "myv", "mzn", "na", "nah", "nan", "nap", "nds", "nds-nl",
+    "ne", "new", "ng", "nia", "nl", "nn", "no", "nov", "nqo", "nr", "nrm", "nso", "nup", "nv", "ny", "oc",
+    "olo", "om", "or", "os", "pa", "pag", "pam", "pap", "pcd", "pcm", "pdc", "pfl", "pi", "pih", "pl", "pms",
+    "pnb", "pnt", "ppl", "ps", "pt", "pwn", "qu", "rki", "rm", "rmy", "rn", "ro", "roa-rup", "roa-tara",
+    "rsk", "ru", "rue", "rup", "rw", "sa", "sah", "sat", "sc", "scn", "sco", "sd", "se", "sg", "sgs", "sh",
+    "shi", "shn", "shy", "si", "simple", "sk", "skr", "sl", "sm", "smn", "sn", "so", "sq", "sr", "srn", "ss",
+    "st", "stq", "su", "sv", "sw", "syl", "szl", "szy", "ta", "tay", "tcy", "tdd", "te", "tet", "tg", "th",
+    "ti", "tig", "tk", "tl", "tly", "tn", "to", "tok", "tpi", "tr", "trv", "ts", "tt", "tum", "tw", "ty",
+    "tyv", "udm", "ug", "uk", "ur", "uz", "ve", "vec", "vep", "vi", "vls", "vo", "vro", "wa", "war", "wo",
+    "wuu", "xal", "xh", "xmf", "yi", "yo", "yue", "za", "zea", "zgh", "zh", "zh-classical", "zh-min-nan",
+    "zh-yue", "zu", "cz", "dk", "epo", "jp", "zh-cn", "zh-tw", "cmn", "egl", "en-simple", "nb", "w",
+]
+
+# Wikimedia project and global interwiki prefixes (interwiki.php `__global:*`, `__list:ruwiki`).
+interwiki_prefixes = [
+    "abstract", "acc", "acronym", "advisory", "antwiki", "appropedia", "aquariumwiki", "arbcom-zh",
+    "arborwiki", "arxiv", "b", "battlestarwiki", "bcnbio", "beacha", "betawiki", "betawikiversity", "bibcode",
+    "bibliowiki", "botwiki", "boxrec", "bugzilla", "bulba", "c", "c2", "cache", "ccorg", "centralwikia",
+    "chapter", "choralwiki", "citizendium", "codesearch", "commons", "communitywiki", "comune",
+    "creativecommons", "creativecommonswiki", "d", "dbdump", "dcdatabase", "dcw", "debian", "devmo", "dico",
+    "dicoado", "diffblog", "discord", "disinfopedia", "dmoz", "dmozs", "doi", "donate", "doom_wiki",
+    "download", "dpd", "dpla", "drae", "elibre", "emacswiki", "encyc", "englyphwiki", "enkol", "esolang",
+    "etherpad", "etherpadbackup", "ethnologue", "ethnologuefamily", "exkcd", "exotica", "f", "fandom",
+    "fanimutationwiki", "fedora", "finalfantasy", "finnix", "flickrphoto", "flickruser", "foldoc",
+    "foundation", "foundationsite", "freebsdman", "freedomdefined", "freenode", "freesoft", "gentoo",
+    "genwiki", "gerrit", "git", "github", "gitiles", "gitlab", "globalcontribs", "glottolog", "glottopedia",
+    "google", "googledefine", "googlegroups", "gs", "gucprefix", "guildwarswiki", "gutenberg",
+    "gutenbergwiki", "hackerspaces", "hammondwiki", "hdl", "heraldik", "horizonlabs", "hrfwiki", "hrwiki",
+    "iarchive", "imdbcompany", "imdbname", "imdbtitle", "incubator", "infosphere", "irc", "ircrc", "ircs",
+    "isni", "iso639-3", "issn", "jaglyphwiki", "jira", "jstor", "kamelo", "karlsruhe", "labsconsole",
+    "lexemes", "liberachat", "libreplanet", "lingualibre", "linguistlist", "listarchive", "localwiki", "lofc",
+    "lojban", "lokalhistoriewiki", "lostpedia", "luxo", "m", "mail", "mailarchive", "mariowiki",
+    "marveldatabase", "mdwiki", "meatball", "mediawikiwiki", "mediazilla", "memoryalpha", "meta", "metawiki",
+    "metawikimedia", "metawikipedia", "mineralienatlas", "miraheze", "mixnmatch", "moinmoin", "mosapedia",
+    "mozillawiki", "mozillazinekb", "mw", "mwod", "mwot", "n", "nara", "nlab", "nost", "nostalgia", "oclc",
+    "oeis", "oewiki", "oldwikisource", "olpc", "openlibrary", "openstreetmap", "openwetware", "organicdesign",
+    "orthodoxwiki", "osmwiki", "otrs", "otrswiki", "outreach", "outreachwiki", "owasp", "paws", "petscan",
+    "phab", "phabricator", "planetmath", "pmid", "pokewiki", "pokéwiki", "policy", "proofwiki", "pyrev",
+    "pythoninfo", "q", "quality", "quarry", "rcirc", "regiowiki", "rev", "revo", "rfc", "rheinneckar",
+    "rodovid", "rt", "s", "scholar", "schoolswp", "schoolwiki", "scores", "scoutwiki", "securewikidc",
+    "semantic-mw", "senseislibrary", "sep11", "sharemap", "shoutwiki", "silcode", "slashdot", "sourceforge",
+    "spamcheck", "spcom", "species", "stats", "stewardry", "strategy", "strategywiki", "sulutil", "svn",
+    "swtrain", "tardis", "tclerswiki", "tenwiki", "test2wiki", "testcommons", "testwiki", "testwikidata",
+    "tfwiki", "thelemapedia", "theopedia", "ticket", "tmbw", "tolkiengateway", "toolforge", "toolhub",
+    "toollabs", "tools", "translatewiki", "tswiki", "tviv", "twiki", "twl", "tyvawiki", "umap",
+    "uncyclopedia", "unihan", "urbandict", "usability", "usemod", "utrs", "v", "viaf", "vikidia", "vlos",
+    "votewiki", "voy", "vrts", "vrtwiki", "wcna", "weirdgloop", "werelate", "wg", "wikia", "wikiapiary",
+    "wikiasite", "wikibooks", "wikicities", "wikicity", "wikiconference", "wikidata", "wikiedudashboard",
+    "wikifunctions", "wikifur", "wikihow", "wikiindex", "wikilivres", "wikilivresru", "wikimania",
+    "wikimedia", "wikinews", "wikinfo", "wikinvest", "wikipapers", "wikipedia", "wikipediawikipedia",
+    "wikiquote", "wikiskripta", "wikisophia", "wikisource", "wikisp", "wikispecies", "wikispore", "wikispot",
+    "wikitech", "wikiti", "wikitrek", "wikiversity", "wikivoyage", "wikiwikiweb", "wikt", "wiktionary",
+    "wm2005", "wm2006", "wm2007", "wm2008", "wm2009", "wm2010", "wm2011", "wm2012", "wm2013", "wm2014",
+    "wm2015", "wm2016", "wm2017", "wm2018", "wmam", "wmania", "wmar", "wmat", "wmau", "wmbd", "wmbe", "wmbr",
+    "wmca", "wmch", "wmcl", "wmcn", "wmco", "wmcz", "wmcz_docs", "wmcz_old", "wmdc", "wmde", "wmdeblog",
+    "wmdetech", "wmdk", "wmdoc", "wmec", "wmee", "wmes", "wmet", "wmf", "wmfblog", "wmfdashboard", "wmfi",
+    "wmfr", "wmge", "wmhi", "wmhk", "wmhu", "wmid", "wmil", "wmin", "wmit", "wmke", "wmmk", "wmmx", "wmnl",
+    "wmno", "wmnoc", "wmnoch", "wmnyc", "wmpa-us", "wmph", "wmpl", "wmplsite", "wmpt", "wmpunjabi", "wmromd",
+    "wmrs", "wmru", "wmse", "wmsk", "wmteam", "wmtr", "wmtw", "wmua", "wmuk", "wmve", "wmza", "wookieepedia",
+    "wowwiki", "wplibrary", "wurmpedia", "xkcd", "xtools", "zum",
+]
+
+# Namespace id (as a string) mapped to its names and aliases. Underscore and space are the same; matching ignores case.
+# MessagesRu.php (core), canonical English names (NamespaceInfo) as aliases, core-Namespaces.php for ruwiki (100-107 and the short aliases).
+[namespaces]
+"-2" = ["Медиа", "Media"]
+"-1" = ["Служебная", "Special"]
+"1" = ["Обсуждение", "Talk"]
+"2" = ["Участник", "Участница", "User", "У", "U"]
+"3" = ["Обсуждение участника", "Обсуждение участницы", "User talk", "ОУ", "UT"]
+"4" = ["Википедия", "Project", "ВП"]
+"5" = ["Обсуждение Википедии", "Project talk"]
+"6" = ["Файл", "Изображение", "File", "Image"]
+"7" = ["Обсуждение файла", "Обсуждение изображения", "File talk", "Image talk"]
+"8" = ["MediaWiki"]
+"9" = ["Обсуждение MediaWiki", "MediaWiki talk"]
+"10" = ["Шаблон", "Template", "Ш", "T"]
+"11" = ["Обсуждение шаблона", "Template talk"]
+"12" = ["Справка", "Help"]
+"13" = ["Обсуждение справки", "Help talk"]
+"14" = ["Категория", "Category", "К"]
+"15" = ["Обсуждение категории", "Category talk"]
+"100" = ["Портал", "Portal"]
+"101" = ["Обсуждение портала", "Portal talk"]
+"102" = ["Инкубатор", "Incubator", "И"]
+"103" = ["Обсуждение Инкубатора"]
+"104" = ["Проект", "ПРО"]
+"105" = ["Обсуждение проекта", "ОПРО"]
+"106" = ["Арбитраж", "АК", "Arbcom"]
+"107" = ["Обсуждение арбитража"]
+"710" = ["TimedText"]
+"711" = ["TimedText talk"]
+"828" = ["Модуль", "Module"]
+"829" = ["Обсуждение модуля", "Module talk"]
+"2300" = ["Гаджет", "Gadget"]
+"2301" = ["Обсуждение гаджета", "Gadget talk"]
+"2302" = ["Определение гаджета", "Gadget definition"]
+"2303" = ["Обсуждение определения гаджета", "Gadget definition talk"]

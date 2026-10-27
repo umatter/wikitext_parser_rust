@@ -2,6 +2,7 @@
 
 use std::path::{Path, PathBuf};
 use wikitext_components::corpus::{self, CorpusRow};
+use wikitext_components::settings::Settings;
 
 pub const DEFAULT_PRIVATE: &str = "../ruwiki_replication_package_sources/data/results/sources/test_corpus/parser_test_corpus_v1.parquet";
 
@@ -27,4 +28,9 @@ pub fn private_corpus(test: &str) -> Option<Vec<CorpusRow>> {
 pub fn fixture(name: &str) -> String {
     std::fs::read_to_string(format!("tests/fixtures/{name}.wiki"))
         .unwrap_or_else(|e| panic!("fixture {name}: {e}"))
+}
+
+/// Settings of Russian Wikipedia.
+pub fn ru() -> Settings {
+    Settings::load(Path::new("config/sites/ru.wikipedia.toml")).expect("ru settings load")
 }
