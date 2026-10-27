@@ -34,3 +34,63 @@ pub fn fixture(name: &str) -> String {
 pub fn ru() -> Settings {
     Settings::load(Path::new("config/sites/ru.wikipedia.toml")).expect("ru settings load")
 }
+
+use wikitext_components::model::{Key, PageOutput};
+use wikitext_components::page::{self, Limits, PageInput};
+use wikitext_components::registry::Registry;
+
+/// The four defaults, with the fallback on.
+pub fn defaults() -> Limits {
+    Limits {
+        parse_budget: page::DEFAULT_PARSE_BUDGET,
+        walk_budget: page::DEFAULT_WALK_BUDGET,
+        depth_cap: page::DEFAULT_DEPTH_CAP,
+        fallback: true,
+    }
+}
+
+/// The registry (empty until Task 14 loads `config/registry/`).
+pub fn reg() -> Registry {
+    Registry::default()
+}
+
+fn test_key(site: &str) -> Key {
+    Key {
+        source_file: "test.parquet".into(),
+        row: 0,
+        page_id: "1".into(),
+        site: site.into(),
+        version: "test".into(),
+        column: "text".into(),
+    }
+}
+
+fn run_settings(text: Option<&str>, settings: &Settings, site: &str, limits: &Limits) -> PageOutput {
+    let input = PageInput {
+        key: test_key(site),
+        title: None,
+        timestamp: None,
+        text: text.map(str::to_string),
+    };
+    page::process_page(&input, settings, &reg(), limits)
+}
+
+/// Process `text` on site `wikipedia` (Russian Wikipedia settings) or `ruwiki`.
+pub fn run_page(text: &str, site: &str) -> PageOutput {
+    let settings = if site == "ruwiki" {
+        Settings::load(Path::new("config/sites/ruwiki.toml")).expect("ruwiki settings load")
+    } else {
+        ru()
+    };
+    run_settings(Some(text), &settings, site, &defaults())
+}
+
+/// Process `text` on site `wikipedia` with the given limits.
+pub fn run_with(text: &str, limits: Limits) -> PageOutput {
+    run_settings(Some(text), &ru(), "wikipedia", &limits)
+}
+
+/// Process an optional text on site `wikipedia` with the defaults.
+pub fn run_opt(text: Option<&str>) -> PageOutput {
+    run_settings(text, &ru(), "wikipedia", &defaults())
+}
