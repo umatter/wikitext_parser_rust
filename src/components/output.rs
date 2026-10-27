@@ -162,8 +162,8 @@ pub fn record_batch(table: &str, pages: &[PageOutput]) -> Result<RecordBatch> {
 const ROW_GROUP_BYTES: usize = 64 << 20;
 
 /// Writes one table's part file for one input: `<out>/<table>/<stem>.parquet.tmp` while writing,
-/// renamed to `<stem>.parquet` by `finish`. The driver finishes `pages` last, so a finished `pages`
-/// part means every other part of that input is finished too.
+/// renamed to `<stem>.parquet` by `finish`. The driver finishes `pages` last (by name), so a finished
+/// `pages` part means every other part of that input is finished too.
 pub struct PartWriter {
     table: String,
     tmp: PathBuf,
@@ -188,6 +188,10 @@ impl PartWriter {
             .build();
         let writer = ArrowWriter::try_new(file, schema(table), Some(props))?;
         Ok(PartWriter { table: table.to_string(), tmp, path, writer, rows: 0 })
+    }
+
+    pub fn table(&self) -> &str {
+        &self.table
     }
 
     pub fn append(&mut self, pages: &[PageOutput]) -> Result<()> {

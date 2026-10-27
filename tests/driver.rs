@@ -17,6 +17,7 @@ use wikitext_components::settings::Settings;
 const BIN: &str = env!("CARGO_BIN_EXE_parse_components");
 const CORPUS: &str = "tests/corpus/wikipedia_v1.parquet";
 const STEM: &str = "wikipedia_v1";
+const JSON_KEYS: [&str; 7] = ["page", "sections", "paragraphs", "templates", "refs", "ref_lists", "citations"];
 const LABELS: [&str; 3] = [
     "wiki_forkday=wikipedia:forkday",
     "wiki_2025=wikipedia:2025-01-01",
@@ -185,9 +186,8 @@ fn wiki_file_to_json() {
     assert_eq!(v["page"]["site"], "wikipedia");
     assert_eq!(v["page"]["version"], "adhoc");
     assert_eq!(v["page"]["page_id"], "refs_basic");
-    let mut keys: Vec<&str> = v.as_object().unwrap().keys().map(String::as_str).collect();
-    keys.sort();
-    assert_eq!(keys, ["citations", "page", "paragraphs", "ref_lists", "refs", "sections", "templates"]);
+    let keys: Vec<&str> = v.as_object().unwrap().keys().map(String::as_str).collect();
+    assert_eq!(keys, JSON_KEYS, "keys in the documented order");
     let _ = fs::remove_dir_all(&d);
 }
 
@@ -232,8 +232,42 @@ fn manifest_records_hashes_and_counts() {
     assert_eq!(pages["rows"], 180);
     assert!(m["failed_inputs"].as_array().unwrap().is_empty());
     assert!(m["pages_per_second"].as_f64().unwrap() > 0.0);
+    assert_eq!(outputs.last().unwrap()["path"], format!("pages/{STEM}.parquet"), "outputs in rename order, pages last");
+    // R19: the vendored parser's patches and a hash of its source, for builds without git.
+    let patches: Vec<&str> = m["vendored_patches"].as_array().unwrap().iter().map(|p| p.as_str().unwrap()).collect();
+    assert!(!patches.is_empty());
+    assert!(patches.iter().any(|p| p.to_lowercase().contains("budget")), "{patches:?}");
+    assert!(patches.iter().all(|p| !p.is_empty() && !p.ends_with('.')), "{patches:?}");
+    assert_eq!(m["vendored_src_sha256"], vendored_src_sha256());
     assert!(m["seconds_over_budget"].as_f64().unwrap() >= 0.0);
     let _ = fs::remove_dir_all(&out);
+}
+
+/// sha256 over vendor/parse-wiki-text-2/src/: each file in sorted relative-path order, its path
+/// (relative to that directory, `/`-separated) then its contents.
+fn vendored_src_sha256() -> String {
+    use sha2::{Digest, Sha256};
+    fn walk(dir: &Path, base: &Path, out: &mut Vec<(String, PathBuf)>) {
+        for e in fs::read_dir(dir).unwrap() {
+            let p = e.unwrap().path();
+            if p.is_dir() {
+                walk(&p, base, out);
+            } else {
+                let rel = p.strip_prefix(base).unwrap().iter().map(|c| c.to_str().unwrap()).collect::<Vec<_>>().join("/");
+                out.push((rel, p));
+            }
+        }
+    }
+    let base = Path::new("vendor/parse-wiki-text-2/src");
+    let mut files = vec![];
+    walk(base, base, &mut files);
+    files.sort();
+    let mut h = Sha256::new();
+    for (rel, p) in files {
+        h.update(rel.as_bytes());
+        h.update(fs::read(p).unwrap());
+    }
+    h.finalize().iter().map(|b| format!("{b:02x}")).collect()
 }
 
 #[test]
@@ -516,10 +550,23 @@ fn every_table_batch_and_part_file_carries_its_schema() {
 #[test]
 fn page_json_has_the_documented_shape() {
     let p = sample(0, 1);
-    let v: Value = serde_json::from_str(&output::page_json(&p)).unwrap();
+    let text = output::page_json(&p);
+    assert!(text.starts_with("{\n  \"page\": {"), "page is the first key, pretty-printed");
+    let v: Value = serde_json::from_str(&text).unwrap();
     assert_eq!(v["page"]["page_id"], "p0");
     assert_eq!(v["sections"][0]["title_text"], "История");
     assert_eq!(v["citations"][0]["authors"][1], "Y");
     assert!(v.get("timing").is_none());
-    assert!(output::page_json(&p).contains("\n  \""), "pretty-printed");
+    let keys: Vec<&str> = v.as_object().unwrap().keys().map(String::as_str).collect();
+    assert_eq!(keys, JSON_KEYS);
+    // Row fields in column order: the table's schema without the six keys (pages keeps them).
+    let fields = |t: &str, skip: usize| -> Vec<String> {
+        output::schema(t).fields().iter().skip(skip).map(|f| f.name().clone()).collect()
+    };
+    let keys_of = |v: &Value| -> Vec<String> { v.as_object().unwrap().keys().cloned().collect() };
+    assert_eq!(keys_of(&v["page"]), fields("pages", 0));
+    for t in &JSON_KEYS[1..] {
+        assert_eq!(keys_of(&v[*t][0]), fields(t, 6), "{t}: keys in column order");
+    }
+    assert_eq!(keys_of(&v["templates"][0]["params"][0]), ["name", "positional", "value_raw", "value_text", "start", "end"]);
 }

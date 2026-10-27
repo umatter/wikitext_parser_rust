@@ -34,6 +34,8 @@ pub const BATCH_ROWS: usize = 256;
 pub const WATCHDOG_SECS: u64 = 600;
 /// Upstream commit of the vendored `parse-wiki-text-2` (vendor/parse-wiki-text-2/VENDORED.md).
 pub const VENDORED_UPSTREAM: &str = "bc6bde5";
+// `VENDORED_PATCHES` and `VENDORED_SRC_SHA256`, computed by build.rs.
+include!(concat!(env!("OUT_DIR"), "/vendored.rs"));
 const QUARANTINE: &str = "quarantine.list";
 /// Worker stack size: room for deep pages (D8, step 2).
 const WORKER_STACK: usize = 32 << 20;
@@ -100,6 +102,8 @@ pub struct Manifest {
     pub crate_version: String,
     pub git_commit: String,
     pub vendored_upstream: String,
+    pub vendored_patches: Vec<String>,
+    pub vendored_src_sha256: String,
     pub settings_hashes: BTreeMap<String, String>,
     pub registry_hash: Option<String>,
     pub args: Value,
@@ -397,7 +401,7 @@ impl Tally {
 
 /// Where one input's rows go.
 enum Sink {
-    /// One writer per selected table, `pages` first.
+    /// One writer per selected table, `pages` among them.
     Parquet(Vec<PartWriter>),
     Jsonl { tmp: PathBuf, path: PathBuf, file: BufWriter<File>, rows: usize },
 }
@@ -431,22 +435,24 @@ impl Sink {
         }
     }
 
-    /// Finishes every part, `pages` last, and returns the outputs relative to `out`.
-    fn finish(self, tables: &[&str], stem: &str) -> Result<Vec<OutputEntry>> {
+    /// Finishes every part, `pages` last (chosen by name, whatever the table order), so a finished
+    /// `pages` part marks the input as done. Returns the outputs, relative to `out`, in the order
+    /// their files were renamed into place.
+    fn finish(self, stem: &str) -> Result<Vec<OutputEntry>> {
         match self {
             Sink::Parquet(writers) => {
-                let mut rows = vec![0; writers.len()];
-                let mut writers: Vec<_> = writers.into_iter().enumerate().collect();
-                // `pages` is first in TABLES order; finish it last, so its part marks the input done.
-                writers.rotate_left(1);
-                for (i, w) in writers {
-                    rows[i] = w.finish()?;
+                let (pages, rest): (Vec<_>, Vec<_>) =
+                    writers.into_iter().partition(|w| w.table() == "pages");
+                if pages.len() != 1 {
+                    bail!("expected one pages part, found {}", pages.len());
                 }
-                Ok(tables
-                    .iter()
-                    .zip(rows)
-                    .map(|(t, rows)| OutputEntry { path: format!("{t}/{stem}.parquet"), rows })
-                    .collect())
+                let mut outputs = vec![];
+                for w in rest.into_iter().chain(pages) {
+                    let path = format!("{}/{stem}.parquet", w.table());
+                    let rows = w.finish()?;
+                    outputs.push(OutputEntry { path, rows });
+                }
+                Ok(outputs)
             }
             Sink::Jsonl { tmp, path, file, rows } => {
                 let file = file.into_inner().map_err(|e| e.into_error())?;
@@ -501,7 +507,7 @@ fn process_input(ctx: &Ctx, path: &Path, stem: &str) -> Result<(InputEntry, Vec<
         let outputs: Vec<PageOutput> = done.into_iter().map(|(o, _)| o).collect();
         sink.append(&outputs)?;
     }
-    let outputs = sink.finish(ctx.tables, stem)?;
+    let outputs = sink.finish(stem)?;
     let entry =
         InputEntry { path: path.display().to_string(), rows, pages: tally.pages, resumed: false };
     Ok((entry, outputs, tally))
@@ -529,7 +535,9 @@ fn resumed_input(ctx: &Ctx, path: &Path, stem: &str) -> Result<(InputEntry, Vec<
     let mut outputs = vec![];
     match ctx.args.format {
         Format::Parquet => {
-            for t in ctx.tables {
+            // The order a run renames them in: `pages` last.
+            let tables = ctx.tables.iter().filter(|t| **t != "pages").chain(std::iter::once(&"pages"));
+            for t in tables {
                 let p = out.join(t).join(format!("{stem}.parquet"));
                 if p.exists() {
                     let rows = parquet_rows(&p)?;
@@ -630,6 +638,8 @@ pub fn run(args: &RunArgs) -> Result<Manifest> {
         crate_version: env!("CARGO_PKG_VERSION").to_string(),
         git_commit: env!("GIT_COMMIT").to_string(),
         vendored_upstream: VENDORED_UPSTREAM.to_string(),
+        vendored_patches: VENDORED_PATCHES.iter().map(|p| p.to_string()).collect(),
+        vendored_src_sha256: VENDORED_SRC_SHA256.to_string(),
         settings_hashes,
         // Task 14 loads config/registry/ and records its hash.
         registry_hash: None,
@@ -723,4 +733,26 @@ fn finish_manifest(m: &mut Manifest, tally: Tally, started: Instant) {
     m.pages_per_second = if secs > 0.0 { parsed as f64 / secs } else { 0.0 };
     m.seconds_over_budget = tally.over_budget;
     m.status_counts = tally.counts;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pages_part_is_renamed_last_whatever_the_table_order() {
+        let orders: [&[&str]; 3] =
+            [&["pages", "refs", "sections"], &["refs", "pages", "sections"], &["refs", "sections", "pages"]];
+        for (i, tables) in orders.iter().enumerate() {
+            let d = std::env::temp_dir().join(format!("wtc_sink_{}_{i}", std::process::id()));
+            let _ = fs::remove_dir_all(&d);
+            let sink = Sink::create(&d, Format::Parquet, tables, "s").unwrap();
+            // `finish` returns the outputs in the order their parts were renamed.
+            let renamed: Vec<String> = sink.finish("s").unwrap().into_iter().map(|o| o.path).collect();
+            assert_eq!(renamed.len(), 3, "{tables:?}");
+            assert_eq!(renamed.last().map(String::as_str), Some("pages/s.parquet"), "{tables:?}");
+            assert!(renamed.iter().all(|p| d.join(p).exists()), "{tables:?}");
+            let _ = fs::remove_dir_all(&d);
+        }
+    }
 }
