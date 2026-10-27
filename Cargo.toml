@@ -19,6 +19,15 @@ path = "src/clean_parsed.rs"
 name = "parse_single"
 path = "src/parse_single.rs"
 
+[[bin]]
+name = "parse_components"
+path = "src/parse_components.rs"
+
+[[test]]
+name = "watchdog"
+path = "tests/watchdog.rs"
+required-features = ["test-hooks"]
+
 [lib]
 name = "wikitext_components"
 path = "src/components/lib.rs"
@@ -36,3 +45,8 @@ toml = "0.8"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_arrow = { version = "0.15", features = ["arrow-53"] }
+rayon = "1"
+
+[features]
+# Test-only overrides of the watchdog (WIKITEXT_WATCHDOG_SECS, WIKITEXT_TEST_SLEEP_PAGE).
+test-hooks = []

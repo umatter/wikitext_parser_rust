@@ -1,4 +1,5 @@
 pub mod corpus;
+pub mod driver;
 pub mod frontend;
 pub mod input;
 pub mod model;

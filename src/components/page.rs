@@ -169,6 +169,42 @@ pub fn process_page(
     process_with(input, settings, registry, limits, &walk, &scan)
 }
 
+/// A page the watchdog quarantined in an earlier run (`quarantine.list`). It is not parsed again: it gets
+/// `status = "hang"` and, with the fallback on, the fallback scanner's rows.
+pub fn hang_page(
+    input: &PageInput,
+    settings: &Settings,
+    registry: &Registry,
+    limits: &Limits,
+) -> PageOutput {
+    hang_with(input, settings, registry, limits, &scan)
+}
+
+fn hang_with(
+    input: &PageInput,
+    settings: &Settings,
+    registry: &Registry,
+    limits: &Limits,
+    scan: ScanFn<'_>,
+) -> PageOutput {
+    let mut page = base_row(input, "hang");
+    let mut detail = "hang: over the watchdog limit in an earlier run (quarantine.list)".to_string();
+    let mut components = Components::default();
+    if limits.fallback {
+        let text = input.text.as_deref().unwrap_or("");
+        match guarded(|| scan(text, settings, registry)) {
+            Ok(c) => components = c,
+            Err(sf) => {
+                page.status = "panic".to_string();
+                detail = format!("panic: fallback scan panicked: {} (after {detail})", sf.message);
+            }
+        }
+    }
+    page.status_detail = Some(detail);
+    fill_counts(&mut page, &components);
+    PageOutput { timing: timing_row(&input.key, 0.0, 0.0), page, components }
+}
+
 /// `process_page` with the walk and the fallback scanner as parameters, so tests can inject failures.
 fn process_with(
     input: &PageInput,
@@ -361,5 +397,71 @@ mod tests {
         assert!(d.starts_with("panic: "), "{d}");
         assert!(d.contains("scan blew up") && d.contains("depth_limit"), "{d}");
         assert_eq!(r.components, Components::default());
+    }
+
+    #[test]
+    fn hang_skips_the_parse_and_takes_fallback_rows() {
+        let settings = Settings::load(std::path::Path::new("config/sites/ru.wikipedia.toml")).unwrap();
+        let input = PageInput {
+            key: Key {
+                source_file: "t".into(),
+                row: 3,
+                page_id: "1".into(),
+                site: "wikipedia".into(),
+                version: "v".into(),
+                column: "text".into(),
+            },
+            title: None,
+            timestamp: None,
+            text: Some("== H ==\nx".into()),
+        };
+        let limits = |fallback| Limits {
+            parse_budget: DEFAULT_PARSE_BUDGET,
+            walk_budget: DEFAULT_WALK_BUDGET,
+            depth_cap: DEFAULT_DEPTH_CAP,
+            fallback,
+        };
+        let one_section = |_: &str, _: &Settings, _: &Registry| Components {
+            sections: vec![crate::model::SectionRow {
+                id: 0,
+                start: 0,
+                end: 9,
+                start_char: 0,
+                end_char: 9,
+                section_id: 0,
+                para_id: None,
+                para_offset: None,
+                parent_type: None,
+                parent_id: None,
+                fallback: true,
+                fp: "0000000000000000".into(),
+                level: 2,
+                title_text: "H".into(),
+                title_raw: "H".into(),
+                title_norm: "h".into(),
+                path: vec!["h".into()],
+                parent_section_id: 0,
+                heading_start: Some(0),
+                heading_end: Some(7),
+                subtree_end: 9,
+                role: "content".into(),
+            }],
+            ..Components::default()
+        };
+        let reg = Registry::default();
+        let r = hang_with(&input, &settings, &reg, &limits(true), &one_section);
+        assert_eq!(r.page.status, "hang");
+        assert!(r.page.status_detail.as_deref().unwrap().starts_with("hang: "));
+        assert_eq!((r.page.parse_steps, r.page.n_sections, r.components.sections.len()), (0, 1, 1));
+        assert_eq!((r.timing.row, r.timing.parse_ms), (3, 0.0));
+
+        let r = hang_with(&input, &settings, &reg, &limits(false), &one_section);
+        assert_eq!((r.page.status.as_str(), r.page.n_sections), ("hang", 0));
+
+        let boom = |_: &str, _: &Settings, _: &Registry| -> Components { panic!("scan blew up") };
+        let r = hang_with(&input, &settings, &reg, &limits(true), &boom);
+        assert_eq!(r.page.status, "panic");
+        let d = r.page.status_detail.unwrap();
+        assert!(d.starts_with("panic: ") && d.contains("scan blew up") && d.contains("hang: "), "{d}");
     }
 }
