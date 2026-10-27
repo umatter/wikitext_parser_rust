@@ -46,6 +46,10 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 serde_arrow = { version = "0.15", features = ["arrow-53"] }
 rayon = "1"
+xxhash-rust = { version = "0.8.19", features = ["xxh3"] }
+psl = "2"
+url = "2"
+idna = "1.1.0"
 
 [build-dependencies]
 sha2 = "0.11"

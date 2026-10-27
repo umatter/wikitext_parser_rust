@@ -7,3 +7,6 @@ pub mod output;
 pub mod page;
 pub mod registry;
 pub mod settings;
+pub mod fingerprint;
+pub mod spans;
+pub mod urls;
