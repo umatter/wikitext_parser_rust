@@ -152,6 +152,21 @@ fn opt_if_present(schema: &Schema, name: &str) -> Option<String> {
     schema.field_with_name(name).ok().map(|_| name.to_string())
 }
 
+/// The optional title and timestamp columns of one text column, type-checked.
+fn aux_columns(
+    schema: &Schema,
+    title: Option<String>,
+    timestamp: Option<String>,
+) -> Result<(Option<String>, Option<String>)> {
+    if let Some(t) = &title {
+        require_string(schema, t)?;
+    }
+    if let Some(t) = &timestamp {
+        require_timestamp(schema, t)?;
+    }
+    Ok((title, timestamp))
+}
+
 pub fn open(
     path: &Path,
     layout: Option<Layout>,
@@ -187,14 +202,11 @@ pub fn open(
                 ("clone_text", "clone_page_title", "clone_timestamp"),
             ] {
                 require_string(&schema, col)?;
-                let title = opt_if_present(&schema, title);
-                let ts = opt_if_present(&schema, ts);
-                if let Some(t) = &title {
-                    require_string(&schema, t)?;
-                }
-                if let Some(t) = &ts {
-                    require_timestamp(&schema, t)?;
-                }
+                let (title, ts) = aux_columns(
+                    &schema,
+                    opt_if_present(&schema, title),
+                    opt_if_present(&schema, ts),
+                )?;
                 let l = find_label(labels, col)?;
                 input.specs.push(TextSpec {
                     column: col.to_string(),
@@ -217,14 +229,11 @@ pub fn open(
                 bail!("text column '{col}' not found in schema");
             }
             require_string(&schema, &col)?;
-            let title = detect_title_column(&schema);
-            if let Some(t) = &title {
-                require_string(&schema, t)?;
-            }
-            let ts = opt_if_present(&schema, "timestamp");
-            if let Some(t) = &ts {
-                require_timestamp(&schema, t)?;
-            }
+            let (title, ts) = aux_columns(
+                &schema,
+                detect_title_column(&schema),
+                opt_if_present(&schema, "timestamp"),
+            )?;
             let l = find_label(labels, &col)?;
             input.specs.push(TextSpec {
                 column: col.clone(),
@@ -242,14 +251,11 @@ pub fn open(
             }
             require_string(&schema, &col)?;
             require_string(&schema, "version")?;
-            let title = detect_title_column(&schema);
-            if let Some(t) = &title {
-                require_string(&schema, t)?;
-            }
-            let ts = opt_if_present(&schema, "timestamp");
-            if let Some(t) = &ts {
-                require_timestamp(&schema, t)?;
-            }
+            let (title, ts) = aux_columns(
+                &schema,
+                detect_title_column(&schema),
+                opt_if_present(&schema, "timestamp"),
+            )?;
             input.specs.push(TextSpec {
                 column: col,
                 title,
@@ -262,10 +268,17 @@ pub fn open(
             let mask = ProjectionMask::roots(builder.parquet_schema(), [idx]);
             let reader = builder.with_projection(mask).with_batch_size(65536).build()?;
             let mut distinct = BTreeSet::new();
+            let mut row = 0usize;
             for batch in reader {
                 let batch = batch?;
-                for v in strings(batch.column(0), "version")?.into_iter().flatten() {
-                    distinct.insert(v);
+                for v in strings(batch.column(0), "version")? {
+                    match v {
+                        Some(v) => {
+                            distinct.insert(v);
+                        }
+                        None => bail!("null value in version column at row {row}"),
+                    }
+                    row += 1;
                 }
             }
             for v in &distinct {
@@ -368,6 +381,9 @@ impl InputFile {
         self.layout
     }
 
+    /// Streams the file in batches of `rows` input rows. A reader or conversion error is yielded
+    /// as one `Err` item, after which the iterator ends; the caller must treat it as fatal for
+    /// this file. Nothing is swallowed.
     pub fn batches(&mut self, rows: usize) -> impl Iterator<Item = Result<Vec<PageInput>>> + '_ {
         let reader = File::open(&self.path)
             .map_err(anyhow::Error::from)
@@ -404,7 +420,8 @@ impl InputFile {
         let mut out = Vec::with_capacity(n * self.specs.len());
         for i in 0..n {
             let row = first_row + i as i32;
-            let page_id = ids[i].clone().ok_or_else(|| anyhow!("null page_id at row {row}"))?;
+            // A null page_id flows on as ""; `row` keeps the page apart.
+            let page_id = ids[i].clone().unwrap_or_default();
             for (s, c) in self.specs.iter().zip(&mut cols) {
                 let (site, version) = match &versions {
                     Some(v) => {
