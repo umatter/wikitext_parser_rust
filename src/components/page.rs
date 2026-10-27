@@ -39,6 +39,8 @@ struct Failure {
 
 /// Why the walk stopped early (the walk of Task 13 returns this).
 #[derive(Debug, Clone, PartialEq)]
+// Constructed by the walk of Task 13; until then only the tests build them.
+#[allow(dead_code)]
 enum WalkError {
     Budget { steps: u64 },
     Depth { cap: usize },
@@ -154,11 +156,27 @@ fn ms(t: Instant) -> f64 {
     t.elapsed().as_secs_f64() * 1000.0
 }
 
+type WalkFn<'f> =
+    &'f dyn Fn(&str, &Output<'_>, &Settings, &Registry, &Limits) -> Result<Components, WalkError>;
+type ScanFn<'f> = &'f dyn Fn(&str, &Settings, &Registry) -> Components;
+
 pub fn process_page(
     input: &PageInput,
     settings: &Settings,
     registry: &Registry,
     limits: &Limits,
+) -> PageOutput {
+    process_with(input, settings, registry, limits, &walk, &scan)
+}
+
+/// `process_page` with the walk and the fallback scanner as parameters, so tests can inject failures.
+fn process_with(
+    input: &PageInput,
+    settings: &Settings,
+    registry: &Registry,
+    limits: &Limits,
+    walk: WalkFn<'_>,
+    scan: ScanFn<'_>,
 ) -> PageOutput {
     let finish = |page: PageRow, parse_ms: f64, walk_ms: f64, components: Components| {
         let mut page = page;
@@ -176,10 +194,20 @@ pub fn process_page(
     // A failure either ends the page with its status or, with the fallback on, hands it to the scanner.
     let fail = |mut page: PageRow, f: Failure, parse_ms: f64, walk_ms: f64| {
         if limits.fallback {
-            page.status = "fallback".to_string();
-            page.status_detail = Some(format!("{}: {}", f.status, f.message));
-            let components = scan(text, settings, registry);
-            finish(page, parse_ms, walk_ms, components)
+            let detail = format!("{}: {}", f.status, f.message);
+            match guarded(|| scan(text, settings, registry)) {
+                Ok(components) => {
+                    page.status = "fallback".to_string();
+                    page.status_detail = Some(detail);
+                    finish(page, parse_ms, walk_ms, components)
+                }
+                Err(sf) => {
+                    page.status = "panic".to_string();
+                    page.status_detail =
+                        Some(format!("panic: fallback scan panicked: {} (after {detail})", sf.message));
+                    finish(page, parse_ms, walk_ms, Components::default())
+                }
+            }
         } else {
             page.status = f.status.to_string();
             page.status_detail = Some(format!("{}: {}", f.status, f.message));
@@ -258,5 +286,80 @@ mod tests {
         assert_eq!(f.status, "budget");
         let f: Failure = WalkError::Panic("p".into()).into();
         assert_eq!((f.status, f.message.as_str()), ("panic", "p"));
+    }
+
+    use crate::model::Key;
+
+    fn run(walk: WalkFn<'_>, scan: ScanFn<'_>, fallback: bool) -> PageOutput {
+        let settings = Settings::load(std::path::Path::new("config/sites/ru.wikipedia.toml")).unwrap();
+        let input = PageInput {
+            key: Key {
+                source_file: "t".into(),
+                row: 0,
+                page_id: "1".into(),
+                site: "wikipedia".into(),
+                version: "v".into(),
+                column: "text".into(),
+            },
+            title: None,
+            timestamp: None,
+            text: Some("Привет '''мир'''".into()),
+        };
+        let limits = Limits {
+            parse_budget: DEFAULT_PARSE_BUDGET,
+            walk_budget: DEFAULT_WALK_BUDGET,
+            depth_cap: DEFAULT_DEPTH_CAP,
+            fallback,
+        };
+        process_with(&input, &settings, &Registry::default(), &limits, walk, scan)
+    }
+
+    fn ok_scan(_: &str, _: &Settings, _: &Registry) -> Components {
+        Components::default()
+    }
+
+    #[test]
+    fn walk_failures_give_status_or_fallback() {
+        let cases: [(WalkError, &str); 3] = [
+            (WalkError::Budget { steps: 9 }, "budget"),
+            (WalkError::Depth { cap: 400 }, "depth_limit"),
+            (WalkError::Panic("boom".into()), "panic"),
+        ];
+        for (err, status) in cases {
+            let walk = |_: &str, _: &Output<'_>, _: &Settings, _: &Registry, _: &Limits| Err(err.clone());
+            let a = run(&walk, &ok_scan, false);
+            assert_eq!(a.page.status, status);
+            assert!(a.page.status_detail.unwrap().starts_with(&format!("{status}: ")));
+            let b = run(&walk, &ok_scan, true);
+            assert_eq!(b.page.status, "fallback");
+            assert!(b.page.status_detail.unwrap().starts_with(&format!("{status}: ")));
+        }
+    }
+
+    #[test]
+    fn walk_panic_is_caught() {
+        let walk = |_: &str, _: &Output<'_>, _: &Settings, _: &Registry, _: &Limits| -> Result<Components, WalkError> {
+            panic!("walk blew up")
+        };
+        let a = run(&walk, &ok_scan, false);
+        assert_eq!(a.page.status, "panic");
+        assert_eq!(a.page.status_detail.as_deref(), Some("panic: walk blew up"));
+        let b = run(&walk, &ok_scan, true);
+        assert_eq!(b.page.status, "fallback");
+        assert_eq!(b.page.status_detail.as_deref(), Some("panic: walk blew up"));
+    }
+
+    #[test]
+    fn scan_panic_gives_panic_row_naming_both() {
+        let walk = |_: &str, _: &Output<'_>, _: &Settings, _: &Registry, _: &Limits| {
+            Err(WalkError::Depth { cap: 400 })
+        };
+        let scan = |_: &str, _: &Settings, _: &Registry| -> Components { panic!("scan blew up") };
+        let r = run(&walk, &scan, true);
+        assert_eq!(r.page.status, "panic");
+        let d = r.page.status_detail.unwrap();
+        assert!(d.starts_with("panic: "), "{d}");
+        assert!(d.contains("scan blew up") && d.contains("depth_limit"), "{d}");
+        assert_eq!(r.components, Components::default());
     }
 }
