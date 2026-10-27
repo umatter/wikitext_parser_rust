@@ -9,32 +9,57 @@ fn is_ws(b: u8) -> bool {
     matches!(b, b' ' | b'\t' | b'\n' | b'\r' | 0x0c)
 }
 
-/// The slice from `<` to the first `>` outside quotes. With no such `>` the
-/// whole input; input not starting with `<` comes back unchanged.
-pub fn open_tag(source: &str) -> &str {
-    if !source.starts_with('<') {
-        return source;
-    }
+/// Scan to the first `>` outside a quoted value. A quote opens a value only
+/// right after `=` (and optional whitespace); elsewhere it is an ordinary char.
+/// Returns the byte index of that `>` and the last significant byte before it
+/// (a quoted region counts as its quote char, never `/`).
+fn scan(source: &str) -> (Option<usize>, u8) {
     let mut quote: Option<u8> = None;
+    let mut last = 0u8;
     for (i, &b) in source.as_bytes().iter().enumerate() {
         match quote {
             Some(q) => {
                 if b == q {
                     quote = None;
                 }
+                last = q;
             }
             None => match b {
-                b'"' | b'\'' => quote = Some(b),
-                b'>' => return &source[..=i],
-                _ => {}
+                b'>' => return (Some(i), last),
+                b'"' | b'\'' if last == b'=' => {
+                    quote = Some(b);
+                    last = b;
+                }
+                _ if is_ws(b) => {}
+                _ => last = b,
             },
         }
     }
-    source
+    (None, last)
+}
+
+/// The slice from `<` to the first `>` that is not inside a quoted value. With
+/// no such `>` the whole input; input not starting with `<` comes back unchanged.
+pub fn open_tag(source: &str) -> &str {
+    if !source.starts_with('<') {
+        return source;
+    }
+    match scan(source).0 {
+        Some(i) => &source[..=i],
+        None => source,
+    }
 }
 
 fn clean(raw: &str) -> String {
-    decode_entities(raw).split_whitespace().collect::<Vec<_>>().join(" ")
+    let decoded = decode_entities(raw);
+    let mut out = String::with_capacity(decoded.len());
+    for w in decoded.split(|c: char| c.is_ascii() && is_ws(c as u8)).filter(|w| !w.is_empty()) {
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        out.push_str(w);
+    }
+    out
 }
 
 /// Attributes in order, duplicates kept. Names lowercased; values unquoted,
@@ -104,26 +129,5 @@ pub fn tag_attrs(open_tag: &str) -> Vec<(String, String)> {
 /// True when the last non-whitespace char before the closing `>` is a `/`
 /// outside quotes.
 pub fn self_closing(open_tag: &str) -> bool {
-    let mut quote: Option<u8> = None;
-    let mut last = 0u8;
-    for &b in open_tag.as_bytes() {
-        match quote {
-            Some(q) => {
-                if b == q {
-                    quote = None;
-                }
-                last = q;
-            }
-            None => match b {
-                b'>' => break,
-                b'"' | b'\'' => {
-                    quote = Some(b);
-                    last = b;
-                }
-                _ if is_ws(b) => {}
-                _ => last = b,
-            },
-        }
-    }
-    last == b'/'
+    scan(open_tag).1 == b'/'
 }

@@ -41,3 +41,26 @@ fn edge_cases_never_panic() {
     assert_eq!(get(tag_attrs("<ref name=\"a&amp;\n  b\">"), "name"), Some("a& b".into()));
     assert_eq!(get(tag_attrs("<ref name=\"unterminated>x"), "name"), Some("unterminated>x".into()));
 }
+
+#[test]
+fn edge_values_are_asserted() {
+    let t = "<ref name=ж/>";
+    assert_eq!(get(tag_attrs(open_tag(t)), "name"), Some("ж".into()));
+    assert!(self_closing(open_tag(t)));
+    assert!(!self_closing(open_tag(r#"<ref name="a/">"#)));
+    assert!(self_closing(open_tag("<ref/>")));
+    let t = "<ref\tname=a\ngroup=b\t>";
+    let a = tag_attrs(open_tag(t));
+    assert_eq!(get(a.clone(), "name"), Some("a".into()));
+    assert_eq!(get(a, "group"), Some("b".into()));
+    assert_eq!(get(tag_attrs("<ref name=\"\u{a0}a\u{a0}\u{a0}b \u{a0}\">"), "name"), Some("\u{a0}a\u{a0}\u{a0}b \u{a0}".into()));
+    let t = "<ref name=O'Brien>x</ref>";
+    assert_eq!(open_tag(t), "<ref name=O'Brien>");
+    assert_eq!(get(tag_attrs(open_tag(t)), "name"), Some("O'Brien".into()));
+    assert!(!self_closing(open_tag(t)));
+    let t = "<ref name=O'Brien group=\"x\">y'z</ref>";
+    assert_eq!(open_tag(t), "<ref name=O'Brien group=\"x\">");
+    assert_eq!(open_tag("<ref name = 'a>b'>x"), "<ref name = 'a>b'>");
+    assert_eq!(get(tag_attrs("<ref name=O'Brien/>"), "name"), Some("O'Brien".into()));
+    assert!(self_closing("<ref name=O'Brien/>"));
+}
