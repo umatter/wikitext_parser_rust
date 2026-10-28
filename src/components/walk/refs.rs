@@ -258,6 +258,11 @@ impl<'t, 's> Refs<'t, 's> {
         id as i32
     }
 
+    /// The row of ref `id`.
+    pub(super) fn row(&self, id: usize) -> &RefRow {
+        &self.rows[id]
+    }
+
     /// A `<ref>` tag spanning `start..end` is entered at `place`. Returns the ref's id.
     pub(super) fn enter_tag(&mut self, start: usize, end: usize, place: Place, parent: Parent) -> i32 {
         let span = clamp_span(self.text, start, end);

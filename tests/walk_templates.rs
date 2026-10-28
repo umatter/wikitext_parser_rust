@@ -219,7 +219,7 @@ impl Page<'_> {
     }
 }
 
-fn check_page(pg: &Page, c: &Components, reg: &Registry, site: &str, n: &mut [usize; 4]) {
+fn check_page(pg: &Page, c: &Components, reg: &Registry, site: &str, n: &mut [usize; 5]) {
     let text = pg.text;
     let chars = CharIndex::new(text);
     for (i, t) in c.templates.iter().enumerate() {
@@ -321,6 +321,47 @@ fn check_page(pg: &Page, c: &Components, reg: &Registry, site: &str, n: &mut [us
         ck(l.n_entries as usize == defs, "n_entries", &|| format!("{} {defs}", l.n_entries));
         n[3] += 1;
     }
+    for (i, x) in c.citations.iter().enumerate() {
+        let ck = |ok: bool, field: &str, detail: &dyn Fn() -> String| pg.check(ok, "citation", x.id, field, detail);
+        ck(x.id == i as i32, "id", &|| format!("{} {i}", x.id));
+        let s = pg.span(&chars, "citation", x.id, (x.start, x.end, x.start_char, x.end_char));
+        ck(c.sections.get(x.section_id as usize).is_some(), "section_id", &|| x.section_id.to_string());
+        ck(x.para_id.is_some() == x.para_offset.is_some(), "para_id with para_offset", &|| format!("{:?} {:?}", x.para_id, x.para_offset));
+        ck(x.fp.len() == 16, "fp", &|| x.fp.clone());
+        ck(x.host.is_none() || x.url.is_some(), "host needs url", &String::new);
+        ck(x.registrable_domain.is_none() || x.host.is_some(), "registrable_domain needs host", &String::new);
+        ck(x.harv_key.is_none(), "harv_key left to Task 17", &String::new);
+        ck(matches!(x.context.as_str(), "in_ref" | "bibliography" | "other"), "context", &|| x.context.clone());
+        ck((x.context == "in_ref") == x.ref_id.is_some(), "ref_id with context", &|| format!("{} {:?}", x.context, x.ref_id));
+        let outer = x.ref_id.and_then(|r| c.refs.get(r as usize));
+        ck(x.ref_id.is_none() || outer.is_some(), "ref_id exists", &|| format!("{:?}", x.ref_id));
+        if let Some(r) = outer {
+            ck(r.start <= x.start && x.end <= r.end, "span inside the ref", &|| format!("{}..{}", x.start, x.end));
+        }
+        match x.family.as_str() {
+            "plain_text" => {
+                // The ref's span, and the ref as parent.
+                let r = outer.map(|r| (r.start, r.end, r.id));
+                ck(r.is_some_and(|(a, b, _)| (a, b) == (x.start, x.end)), "plain_text has its ref's span", &String::new);
+                let got = (x.parent_type.as_deref(), x.parent_id);
+                ck(got == (Some("ref"), r.map(|r| r.2)), "plain_text parent is its ref", &|| format!("{got:?}"));
+                ck(x.text.is_some() && x.template_id.is_none(), "plain_text has text and no template", &String::new);
+            }
+            "bare_link" => {
+                ck(s.starts_with('[') || s.contains("://") || s.starts_with("//"), "bare_link span is a link", &|| format!("{s:?}"));
+                ck(x.url.is_some() && x.template_id.is_none() && x.params.is_empty(), "bare_link has a url, no template", &String::new);
+                pg.parent(c, "citation", x.id, (x.parent_type.as_deref(), x.parent_id), (x.start, x.end));
+            }
+            _ => {
+                let t = x.template_id.and_then(|t| c.templates.get(t as usize));
+                ck(t.is_some_and(|t| (t.start, t.end) == (x.start, x.end) && t.role == "citation"), "template row has its template's span", &String::new);
+                ck(t.is_some_and(|t| t.params == x.params && Some(&t.name) == x.template_name.as_ref()), "params and name are the template's", &String::new);
+                ck(s.starts_with("{{"), "span starts with {{", &|| format!("{s:?}"));
+                pg.parent(c, "citation", x.id, (x.parent_type.as_deref(), x.parent_id), (x.start, x.end));
+            }
+        }
+        n[4] += 1;
+    }
 }
 
 #[test]
@@ -338,8 +379,8 @@ fn spans_round_trip_on_the_corpus() {
         texts.extend(rows.into_iter().map(|r| (r.wikitext, "ruwiki", true)));
     }
     let reg = common::reg();
-    let mut n = [0usize; 4];
-    let mut public_n = [0usize; 4];
+    let mut n = [0usize; 5];
+    let mut public_n = [0usize; 5];
     for (index, (text, site, private)) in texts.iter().enumerate() {
         let c = run_page(text, site).components;
         let index = if *private { index - public } else { index };
@@ -348,9 +389,9 @@ fn spans_round_trip_on_the_corpus() {
             public_n = n;
         }
     }
-    let [templates, params, refs, lists] = public_n;
-    eprintln!("public corpus and fixtures: {templates} templates, {params} parameters, {refs} refs, {lists} ref lists");
-    assert!(templates > 1000 && refs > 1000 && lists > 100, "{public_n:?}");
+    let [templates, params, refs, lists, citations] = public_n;
+    eprintln!("public corpus and fixtures: {templates} templates, {params} parameters, {refs} refs, {lists} ref lists, {citations} citations");
+    assert!(templates > 1000 && refs > 1000 && lists > 100 && citations > 1000, "{public_n:?}");
 }
 
 #[test]

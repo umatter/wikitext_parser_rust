@@ -22,8 +22,8 @@
 //!   `Part::Value` a `Sink::Flat` (its `value_text`).
 //! - Task 15 (refs, ref lists): enter `Node::Tag` named `ref` or `references`, and templates whose registry
 //!   role is `footnote` or `ref_list` (`refs.rs`); a tag ref's body is a `Sink::Flat` (its `body_text`).
-//! - Task 16 (citations): citation templates and external links inside ref bodies, found from the same
-//!   enter and exit events.
+//! - Task 16 (citations, `citations.rs`): citation templates and external links inside ref bodies, found
+//!   from the same enter and exit events; the collector keeps its own stack of ref bodies.
 //!
 //! # Parents
 //!
@@ -32,6 +32,7 @@
 //! `<references>` tag (`"ref_list"`) while it is inside the tag. A footnote template is a template and a ref,
 //! the ref innermost, so what it contains belongs to the ref; a ref-list template is a parent as a template.
 
+mod citations;
 mod refs;
 mod sections;
 mod templates;
@@ -46,6 +47,7 @@ use crate::registry::Registry;
 use crate::settings::Settings;
 use crate::spans::CharIndex;
 
+use citations::Citations;
 use refs::Refs;
 use sections::Sections;
 use templates::Templates;
@@ -113,12 +115,13 @@ pub fn walk(
     w.paras.break_paragraph(ParaKind::Prose);
     // Component rows collected during the walk get their `para_id` and `para_offset` here, now that every
     // paragraph is closed and before `finish` consumes the paragraph builder.
-    let Walker { paras, templates, refs, sections, .. } = w;
+    let Walker { paras, templates, refs, citations, sections, .. } = w;
     let resolve = |place| resolve_place(&paras, place);
     let templates = templates.finish(resolve);
     let (refs, ref_lists) = refs.finish(resolve);
     let sections = sections.finish(text, &chars, registry);
-    Ok(Components { templates, refs, ref_lists, sections, paragraphs: paras.finish(), ..Components::default() })
+    let citations = citations.finish(resolve, &sections);
+    Ok(Components { templates, refs, ref_lists, citations, sections, paragraphs: paras.finish() })
 }
 
 /// `para_id` and `para_offset` of a place, once every paragraph is closed.
@@ -224,6 +227,7 @@ struct Walker<'t, 's> {
     paras: TextBuilder<'t>,
     templates: Templates<'t, 's>,
     refs: Refs<'t, 's>,
+    citations: Citations<'t, 's>,
     /// The open components that are parents of what they contain, innermost last (see "Parents").
     parents: Vec<(&'static str, i32)>,
     sections: Sections,
@@ -267,6 +271,7 @@ impl<'t, 's> Walker<'t, 's> {
             paras: TextBuilder::new(text, chars),
             templates: Templates::new(text, chars, settings, registry),
             refs: Refs::new(text, chars, registry, settings.site()),
+            citations: Citations::new(text, chars, registry, settings.site()),
             parents: Vec::new(),
             sections: Sections::new(),
             section: 0,
@@ -462,9 +467,10 @@ impl<'t, 's> Walker<'t, 's> {
                     }
                 }
             }
-            Node::ExternalLink { .. } => {
+            Node::ExternalLink { nodes, .. } => {
                 self.touch(around, start, end);
                 c.url = true;
+                self.citations.enter_link(nodes, (start, end), self.place(), self.parent());
             }
             Node::Tag { name, .. } => {
                 let place = self.place();
@@ -475,6 +481,7 @@ impl<'t, 's> Walker<'t, 's> {
                 match name.as_ref() {
                     "ref" => {
                         let id = self.refs.enter_tag(start, end, place, self.parent());
+                        self.citations.enter_tag_ref(id, (start, end), place);
                         self.parents.push(("ref", id));
                         self.flats.push(Flat::default());
                         c.sink = Sink::Flat(self.flats.len() - 1);
@@ -494,11 +501,13 @@ impl<'t, 's> Walker<'t, 's> {
                 match row.role.as_str() {
                     "footnote" => {
                         let r = self.refs.enter_template(row, place, parent);
+                        self.citations.enter_footnote(row, r, place);
                         self.parents.push(("ref", r));
                     }
                     "ref_list" => self.refs.enter_list_template(row, place, parent),
                     _ => {}
                 }
+                self.citations.enter_template(row, place, parent);
                 self.touch(around, start, end);
                 self.exclude(around, c);
                 c.owner = Owner::Template;
@@ -546,6 +555,9 @@ impl<'t, 's> Walker<'t, 's> {
                     debug_assert_eq!(c.sink, Sink::Flat(self.flats.len() - 1));
                     let body = self.flats.pop().expect("pushed on enter").into_text();
                     self.refs.close_tag(body);
+                    if let Some(("ref", id)) = self.parents.last() {
+                        self.citations.close_ref(self.refs.row(*id as usize));
+                    }
                     self.parents.pop();
                 }
                 "references" => {
@@ -560,11 +572,15 @@ impl<'t, 's> Walker<'t, 's> {
                     match row.role.as_str() {
                         "footnote" => {
                             self.refs.close_template(row);
+                            if let Some(("ref", id)) = self.parents.last() {
+                                self.citations.close_ref(self.refs.row(*id as usize));
+                            }
                             self.parents.pop();
                         }
                         "ref_list" => self.refs.close_list(Some(row)),
                         _ => {}
                     }
+                    self.citations.close_template(self.templates.row(id));
                 }
                 self.parents.pop();
             }
