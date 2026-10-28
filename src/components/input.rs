@@ -106,6 +106,18 @@ pub struct InputFile {
     version_column: String,
 }
 
+/// Fails when two labels share a key: which of them a text takes would be a guess. Labels without a key
+/// (`.wiki` inputs) are checked by the driver, which takes exactly one.
+pub fn check_unique_keys(labels: &[Label]) -> Result<()> {
+    let mut seen = BTreeSet::new();
+    for l in labels.iter().filter(|l| !l.key.is_empty()) {
+        if !seen.insert(l.key.as_str()) {
+            bail!("--label '{}' is given twice; give each key one label", l.key);
+        }
+    }
+    Ok(())
+}
+
 fn find_label<'a>(labels: &'a [Label], key: &str) -> Result<&'a Label> {
     labels.iter().find(|l| l.key == key).ok_or_else(|| anyhow!("no --label for '{key}'"))
 }
@@ -173,6 +185,7 @@ pub fn open(
     text_column: Option<&str>,
     labels: &[Label],
 ) -> Result<InputFile> {
+    check_unique_keys(labels)?;
     let file = File::open(path).with_context(|| format!("opening {}", path.display()))?;
     let builder = ParquetRecordBatchReaderBuilder::try_new(file)
         .with_context(|| format!("reading {}", path.display()))?;

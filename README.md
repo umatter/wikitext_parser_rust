@@ -68,8 +68,9 @@ cargo build --release
   `--format json`, `--config-dir`.
 - Work is bounded by counted steps, not by the clock, so a page's status does not depend on the machine. A page the
   parser cannot finish still gets rows from a linear fallback scanner (`status = fallback`).
-- Measured on one row group of the 2025 cross-section (14,568 pairs) with `--jobs 12` on a 12-thread laptop CPU: about
-  1,280 page versions per second, no page over budget. That projects to under an hour for each input family.
+- Measured on one row group of the 2025 cross-section (14,568 pairs) with `--jobs 12` on a 12-thread laptop CPU:
+  1,844 to 1,932 page versions per second over three runs, no page over budget. That projects to under half an
+  hour for each input family.
 
 ### Tests
 

@@ -603,6 +603,7 @@ pub fn run(args: &RunArgs) -> Result<Manifest> {
     let tables = selected_tables(args)?;
     let sites = load_sites(&args.config_dir)?;
     let registry = Registry::load(&args.config_dir.join("registry"))?;
+    input::check_unique_keys(&args.labels)?;
     let mut settings_hashes = BTreeMap::new();
     for l in &args.labels {
         let s = sites

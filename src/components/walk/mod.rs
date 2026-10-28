@@ -318,9 +318,16 @@ struct Walker<'t, 's> {
     /// The end of a link the walk has just left, until the next element. The parser repeats a piped link's
     /// trail as the link's next sibling: a text node that starts before the link's end.
     after_link: Option<usize>,
-    /// `<pre>` tags open: the parser reads `<pre>` as an HTML tag, MediaWiki its content as raw text, where no
-    /// free URL is a link.
-    pre: usize,
+    /// Where the `<pre>` regions met so far end (the start of their `</pre>`): no free URL starts before it. The
+    /// parser reads `<pre>` as an HTML tag, MediaWiki its content as raw text, where no free URL is a link.
+    /// MediaWiki's preprocessor reads a `<pre>` as one only when its closing tag follows, inside the extension
+    /// tag it is in (a ref's body): an unclosed or self-closing `<pre>` is text, as the fallback scanner reads
+    /// it too.
+    pre_until: usize,
+    /// The last question to `pre_closer` and its answer.
+    pre_closer: Option<(usize, Option<usize>)>,
+    /// The ends of the extension tags open (`<ref>`, `<poem>`), innermost last.
+    tag_ends: Vec<usize>,
     /// What `autolink::scan` keeps between its calls.
     free_cursor: autolink::Cursor,
 }
@@ -357,7 +364,9 @@ impl<'t, 's> Walker<'t, 's> {
             ctx: vec![root],
             lists: 0,
             after_link: None,
-            pre: 0,
+            pre_until: 0,
+            pre_closer: None,
+            tag_ends: Vec::new(),
             free_cursor: autolink::Cursor::default(),
         }
     }
@@ -392,6 +401,33 @@ impl<'t, 's> Walker<'t, 's> {
             Sink::Flat(i) => self.flats[i].push(s),
             Sink::Mute => {}
         }
+    }
+
+    /// The start of the first `</pre>` (in any case, whitespace allowed before the `>`, as the fallback scanner's
+    /// `plain_closer` reads one) at or after `from`. The walk asks in document order, so the answer is kept and
+    /// the text read once.
+    fn pre_closer(&mut self, from: usize) -> Option<usize> {
+        if let Some((asked, found)) = self.pre_closer {
+            if from >= asked && found.is_none_or(|p| p >= from) {
+                return found;
+            }
+        }
+        let b = self.text.as_bytes();
+        let mut k = from;
+        let found = loop {
+            let Some(p) = b.get(k..).and_then(|r| r.windows(2).position(|w| w == b"</")).map(|p| k + p) else {
+                break None;
+            };
+            if b.get(p + 2..p + 5).is_some_and(|n| n.eq_ignore_ascii_case(b"pre")) {
+                let q = p + 5 + b[p + 5..].iter().take_while(|c| matches!(c, b'\t' | b'\n' | b' ')).count();
+                if b.get(q) == Some(&b'>') {
+                    break Some(p);
+                }
+            }
+            k = p + 2;
+        };
+        self.pre_closer = Some((from, found));
+        found
     }
 
     /// The free URLs whose protocol starts in the text `from..to` become events (R73).
@@ -477,8 +513,8 @@ impl<'t, 's> Walker<'t, 's> {
                         _ => return,
                     }
                 }
-                if around.autolink && self.pre == 0 && self.collect.wants_free_urls() {
-                    self.free_urls(start, start + value.len(), around.in_template);
+                if around.autolink && start + value.len() > self.pre_until && self.collect.wants_free_urls() {
+                    self.free_urls(start.max(self.pre_until), start + value.len(), around.in_template);
                 }
                 if around.from > start {
                     // The part of a template name after its colon.
@@ -509,10 +545,11 @@ impl<'t, 's> Walker<'t, 's> {
                 if name == "br" {
                     self.add_str(around.sink, " ", start, end);
                 }
-                if name == "pre" {
-                    match node {
-                        Node::StartTag { .. } => self.pre += 1,
-                        _ => self.pre = self.pre.saturating_sub(1),
+                let self_closing = self.text.get(start..end).is_some_and(|t| t.ends_with("/>"));
+                if name == "pre" && matches!(node, Node::StartTag { .. }) && !self_closing {
+                    let bound = self.tag_ends.last().copied().unwrap_or(self.text.len());
+                    if let Some(close) = self.pre_closer(end).filter(|&c| c < bound) {
+                        self.pre_until = self.pre_until.max(close);
                     }
                 }
             }
@@ -557,6 +594,7 @@ impl<'t, 's> Walker<'t, 's> {
                 self.collect.external_link((start, end), || label_of(nodes), self.place());
             }
             Node::Tag { name, .. } => {
+                self.tag_ends.push(end);
                 let place = self.place();
                 self.touch(around, start, end);
                 if EXCLUDED_TAGS.contains(&name.as_ref()) {
@@ -623,15 +661,18 @@ impl<'t, 's> Walker<'t, 's> {
                 let id = self.headings.pop().expect("pushed on enter");
                 self.collect.heading_title(id, title);
             }
-            Node::Tag { name, .. } => match name.as_ref() {
-                "ref" => {
-                    debug_assert_eq!(c.sink, Sink::Flat(self.flats.len() - 1));
-                    let body = self.flats.pop().expect("pushed on enter").into_text();
-                    self.collect.ref_close(body);
+            Node::Tag { name, .. } => {
+                self.tag_ends.pop();
+                match name.as_ref() {
+                    "ref" => {
+                        debug_assert_eq!(c.sink, Sink::Flat(self.flats.len() - 1));
+                        let body = self.flats.pop().expect("pushed on enter").into_text();
+                        self.collect.ref_close(body);
+                    }
+                    "references" => self.collect.ref_list_close(),
+                    _ => {}
                 }
-                "references" => self.collect.ref_list_close(),
-                _ => {}
-            },
+            }
             Node::Template { .. } => self.collect.template_close(),
             Node::Link { .. } => self.after_link = Some(node.end()),
             Node::Preformatted { .. } => {

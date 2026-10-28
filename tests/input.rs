@@ -115,6 +115,13 @@ fn missing_and_unmatched_labels_are_errors() {
         open(&q, None, None, &[label("text=s:1"), label("nope=s:1")]).err().unwrap().to_string(),
         "--label 'nope' matches no column or version"
     );
+    // A key given twice is an error, even when both labels agree: which one counts would be a guess.
+    for twice in [[label("text=s:1"), label("text=r:2")], [label("text=s:1"), label("text=s:1")]] {
+        assert_eq!(
+            open(&q, None, None, &twice).err().unwrap().to_string(),
+            "--label 'text' is given twice; give each key one label"
+        );
+    }
 }
 
 #[test]

@@ -75,8 +75,8 @@ Every text is labelled on the command line, `--label <key>=<site>:<version>`, an
   (`config/sites/ruwiki.toml`). The text is parsed with that site's settings and registry entries. A site with
   no settings file is an error.
 - `<version>` is free text, carried into the `version` column.
-- A label that matches no column or version value is an error, and so is a text without a label. When the same
-  key is given twice, the first label counts.
+- A label that matches no column or version value is an error, and so is a text without a label, and so is a key
+  given twice.
 
 The layout is detected from the columns (`input::detect_layout`), or forced with `--layout`:
 
@@ -504,13 +504,17 @@ section and paragraph (a bibliography entry, a list item).
 
   Text inside `<nowiki>`, `<pre>`, links, file links and tag attributes has no free URLs; a free URL in the
   parameter of a template that is no citation template (`{{lang-en|http://a.ru}}`) counts, as a bracketed link
-  there does.
+  there does. A `<pre>` hides the free URLs up to its `</pre>` only when that closing tag comes before the end
+  of the ref (or other extension tag) the `<pre>` is in, or before the end of the page outside one: as MediaWiki's
+  preprocessor reads it, an unclosed `<pre>` and a self-closing `<pre/>` are text and hide nothing.
 - A ref with a body and no other row yields one `plain_text` row, at the ref's span with the ref as parent. So
   "refs without an identifiable source" is countable rather than missing.
 - An archive wrapper (`{{webarchive}}`, `{{wayback}}`, `{{архивировано}}`) merges into the nearest preceding row
-  of its body when that row has no `url` or the wrapper's original is the row's `url`: it sets `archive_url` (the
-  wrapper's URL when that is an archive URL, else `https://web.archive.org/web/<date>/<original>`, and none
-  without a date) and `archive_date_raw`, and gives the row its original as `url` when it has none. A row that
+  of its body when that row has no `url` or the wrapper's original is exactly the row's `url` (as the URL
+  analysis gives both: `http://a.ru/x` and `http://a.ru/x/` differ, so a trailing slash makes two rows): it
+  sets `archive_url` (the wrapper's URL when that is an archive URL, else
+  `https://web.archive.org/web/<date>/<original>`, and none without a date) and `archive_date_raw`, and gives the
+  row its original as `url` when it has none. A row that
   already has an archive keeps it. A wrapper inside a citation template's parameter merges into that template's
   row. With nothing to merge into, the wrapper is a row of its own (its entry's family, `web`) with its original
   as `url`.
@@ -598,6 +602,10 @@ Written at the end of a run (`driver::Manifest`).
 - Footnote templates without `group=` take the registry's `default_group`, which comes from page-layout evidence
   (on the corpus pages, `{{efn}}` notes are listed under `{{комментарии}}`, so `{{efn}}` gets group `К`), not
   from the templates' expansion, which cannot be checked offline.
+- A free URL right after a link (`[[Статья]]http://a.ru/x` in a ref) is a `bare_link` on the fallback path only:
+  the parsed path, as MediaWiki does, reads the Latin letters `http` as the link's trail, which leaves no protocol.
+- A comment directly before a protocol (`x<!-- c -->http://a.ru/x` in a ref) does not stop the free URL on either
+  path, although MediaWiki, which removes comments first, would read `xhttp://…` and link nothing.
 - A bare `archive.is` (`archive.today`, `archive.ph`, `archive.li`) link gets no `archive_date_raw`, though its URL
   carries the date.
 - `ref=` together with a year gives the key `CITEREF<ref><year>`, while CS1 uses `ref=` literally as the anchor;

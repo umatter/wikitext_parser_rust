@@ -180,17 +180,31 @@ fn hang_with(
     let mut components = Components::default();
     if limits.fallback {
         let text = input.text.as_deref().unwrap_or("");
-        match guarded(|| scan(text, settings, registry)) {
+        match fallback_scan(scan, text, settings, registry, &detail) {
             Ok(c) => components = c,
-            Err(sf) => {
+            Err(panicked) => {
                 page.status = "panic".to_string();
-                detail = format!("panic: fallback scan panicked: {} (after {detail})", sf.message);
+                detail = panicked;
             }
         }
     }
     page.status_detail = Some(detail);
     fill_counts(&mut page, &components);
     PageOutput { timing: timing_row(&input.key, 0.0, 0.0), page, components }
+}
+
+/// The fallback scan of `text`, run because of `detail` (the page's status detail so far); when the scan
+/// panics, the status detail of a page with status `panic` instead. Both callers use it, so the detail of a
+/// scan panic has one format.
+fn fallback_scan(
+    scan: ScanFn<'_>,
+    text: &str,
+    settings: &Settings,
+    registry: &Registry,
+    detail: &str,
+) -> Result<Components, String> {
+    guarded(|| scan(text, settings, registry))
+        .map_err(|sf| format!("panic: fallback scan panicked: {} (after {detail})", sf.message))
 }
 
 /// `process_page` with the walk and the fallback scanner as parameters, so tests can inject failures.
@@ -219,16 +233,15 @@ fn process_with(
     let fail = |mut page: PageRow, f: Failure, parse_ms: f64, walk_ms: f64| {
         if limits.fallback {
             let detail = format!("{}: {}", f.status, f.message);
-            match guarded(|| scan(text, settings, registry)) {
+            match fallback_scan(scan, text, settings, registry, &detail) {
                 Ok(components) => {
                     page.status = "fallback".to_string();
                     page.status_detail = Some(detail);
                     finish(page, parse_ms, walk_ms, components)
                 }
-                Err(sf) => {
+                Err(panicked) => {
                     page.status = "panic".to_string();
-                    page.status_detail =
-                        Some(format!("panic: fallback scan panicked: {} (after {detail})", sf.message));
+                    page.status_detail = Some(panicked);
                     finish(page, parse_ms, walk_ms, Components::default())
                 }
             }
@@ -379,6 +392,7 @@ mod tests {
         let d = r.page.status_detail.unwrap();
         assert!(d.starts_with("panic: "), "{d}");
         assert!(d.contains("scan blew up") && d.contains("depth_limit"), "{d}");
+        assert_eq!(d, "panic: fallback scan panicked: scan blew up (after depth_limit: nesting deeper than the cap (depth 401))");
         assert_eq!(r.components, Components::default());
     }
 
@@ -446,5 +460,10 @@ mod tests {
         assert_eq!(r.page.status, "panic");
         let d = r.page.status_detail.unwrap();
         assert!(d.starts_with("panic: ") && d.contains("scan blew up") && d.contains("hang: "), "{d}");
+        // The same format as a failed page's scan panic (`fallback_scan`).
+        assert_eq!(
+            d,
+            "panic: fallback scan panicked: scan blew up (after hang: over the watchdog limit in an earlier run (quarantine.list))"
+        );
     }
 }

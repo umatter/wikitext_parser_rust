@@ -47,18 +47,30 @@ fn run_legacy(
     run_legacy_in(scratch)
 }
 
-fn scratch(name: &str) -> std::path::PathBuf {
-    let d = std::env::temp_dir().join(format!("legacy_regression_{name}_{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    d
+/// A scratch directory, removed when the guard drops, so also when a test panics: the private run writes
+/// readable Ruwiki outputs there, which must not stay behind.
+struct Scratch(std::path::PathBuf);
+
+impl Scratch {
+    fn new(name: &str) -> Scratch {
+        let d = std::env::temp_dir().join(format!("legacy_regression_{name}_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        Scratch(d)
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
 }
 
 #[test]
 fn legacy_public_outputs_are_byte_identical_to_v010() {
     let rows = common::public_corpus();
-    let dir = scratch("public");
-    let got = run_legacy(corpus::public_legacy_selection(&rows), &dir);
-    let _ = std::fs::remove_dir_all(&dir);
+    let dir = Scratch::new("public");
+    let got = run_legacy(corpus::public_legacy_selection(&rows), &dir.0);
+    drop(dir);
     let want = corpus::read_legacy_long(Path::new("tests/expected/legacy_wikipedia_v1.parquet"))
         .expect("expected file");
     assert_eq!(got.len(), want.len());
@@ -74,9 +86,9 @@ fn legacy_private_outputs_match_committed_hashes() {
         return;
     };
     let public = common::public_corpus();
-    let dir = scratch("private");
-    let got = run_legacy(corpus::private_legacy_selection(&public, &ruwiki), &dir);
-    let _ = std::fs::remove_dir_all(&dir);
+    let dir = Scratch::new("private");
+    let got = run_legacy(corpus::private_legacy_selection(&public, &ruwiki), &dir.0);
+    drop(dir);
     let want = std::fs::read_to_string("tests/expected/legacy_private.sha256").unwrap();
     assert_eq!(corpus::hash_lines(&got), want);
 }

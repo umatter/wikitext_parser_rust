@@ -12,7 +12,8 @@
    - `parse::parse` takes `Limit::{Duration, Steps}` instead of a `Duration`, counts one step
      per main-loop iteration, and returns `(Output, steps)` on success.
    - New `ParseError::BudgetExceeded { steps, output }`: returned once the counter exceeds a
-     non-zero budget, after flushing as the timeout branch does.
+     non-zero budget, after flushing as the timeout branch does. The doc comment of `ParseError`
+     names both errors.
    - New `Configuration::parse_with_budget(text, max_steps)`; `0` means unlimited.
    - `parse`, `parse_with_timeout` and `parse_without_timeout` keep their signatures and
      behaviour (they drop the step count).

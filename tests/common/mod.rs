@@ -44,6 +44,16 @@ pub const FREE_URL_CASES: &[(&str, &[(&str, Option<&str>, Option<&str>, Option<&
     ("<ref>{{lang-en|http://a.ru/x|y}}</ref>", &[("bare_link", Some("http://a.ru/x"), Some("a.ru"), None)]),
     // Raw text, a link, a file: no URL.
     ("<ref><nowiki>http://a.ru/x</nowiki></ref>", &[("plain_text", None, None, None)]),
+    // `<pre>` content is raw text, but only a `<pre>` closed inside its ref (or before the text's end) is one, as
+    // MediaWiki's preprocessor reads it: a self-closing or unclosed `<pre>` is text and hides nothing after it.
+    ("<ref><pre>http://a.ru/x</pre></ref>", &[("plain_text", None, None, None)]),
+    ("<pre>http://a.ru/x</pre><ref>http://b.ru/y</ref>", &[("bare_link", Some("http://b.ru/y"), Some("b.ru"), None)]),
+    ("<pre/><ref>http://b.ru/y</ref>", &[("bare_link", Some("http://b.ru/y"), Some("b.ru"), None)]),
+    ("<ref><pre>x</ref> <ref>http://b.ru/y</ref>", &[
+        ("plain_text", None, None, None),
+        ("bare_link", Some("http://b.ru/y"), Some("b.ru"), None),
+    ]),
+    ("<pre>x\n\n<ref>http://b.ru/y</ref>", &[("bare_link", Some("http://b.ru/y"), Some("b.ru"), None)]),
     ("<ref>[[http://a.ru]] и [[Статья|http://a.ru/x]]</ref>", &[("plain_text", None, None, None)]),
     // Outside refs, a free URL is no row.
     ("Сайт: http://a.ru/x.", &[]),

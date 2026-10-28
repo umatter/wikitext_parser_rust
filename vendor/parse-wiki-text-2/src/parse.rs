@@ -4,7 +4,7 @@
 
 /// Get's returned if the parsing received an unrecoverable error.
 ///
-/// At the moment, the only error that can occur is a timeout.
+/// Two errors can occur: a timeout, and an exceeded step budget (patch: not in upstream, see VENDORED.md).
 #[derive(Debug)]
 pub enum ParseError<'a> {
 	/// The parsing took too long and was aborted.

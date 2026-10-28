@@ -1,5 +1,6 @@
-# Site settings of Russian Wikipedia (read by src/components/settings.rs). Generated once from MediaWiki source code (see `source`);
-# edit by hand afterwards. Nothing is fetched at build, run or test time.
+# Site settings of Ruwiki, the fork of Russian Wikipedia (read by src/components/settings.rs). A copy of
+# ru.wikipedia.toml, which was generated once from MediaWiki source code (see `source`); only `site` differs.
+# Edit by hand afterwards. Nothing is fetched at build, run or test time.
 
 site = "ruwiki"
 

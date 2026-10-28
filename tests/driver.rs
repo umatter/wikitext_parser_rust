@@ -296,6 +296,21 @@ fn tables_subset_always_writes_pages() {
 }
 
 #[test]
+fn duplicate_label_key_fails_before_any_output() {
+    let d = tmp("duplicate_label");
+    let out = d.join("out");
+    let o = cli(&args(&[
+        "--input", CORPUS, "--out", &s(&out), "--label", LABELS[0], "--label", LABELS[1], "--label", LABELS[2],
+        "--label", "wiki_2025=ruwiki:2025-01-01",
+    ]));
+    assert!(!o.status.success());
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(err.contains("--label 'wiki_2025' is given twice"), "{err}");
+    assert!(!out.exists(), "output written before the label check");
+    let _ = fs::remove_dir_all(&d);
+}
+
+#[test]
 fn unknown_site_fails_before_any_output() {
     let d = tmp("unknown_site");
     let out = d.join("out");
