@@ -1,0 +1,249 @@
+# Template registry. One [[template]] per entry.
+#   name, aliases   normalised like Settings::template_name (case of the first letter, `_`, spaces)
+#   role            infobox | citation | footnote | ref_list | link_status | inline_text | interlanguage
+#                   | navigation | maintenance | other
+#   family          citation kind (web, news, book, journal, encyclopedia, other_template) or note kind
+#   archive_wrapper true for a template that only wraps an archive link ({{webarchive}}, {{wayback}})
+#   site            "wikipedia" or "ruwiki" to limit the entry to one site; absent means both
+#   [template.fields]  canonical key -> parameter names, in order of preference. Positional
+#                   parameters are named "1", "2", ...
+# Parameter names come from the public corpus (tests/corpus/wikipedia_v1.parquet) and from the
+# documented parameters of the templates.
+
+[[template]]
+name = "cite web"
+aliases = ["citeweb"]
+role = "citation"
+family = "web"
+[template.fields]
+url = ["url"]
+archive_url = ["archive-url", "archiveurl", "archive_url"]
+archive_date_raw = ["archive-date", "archivedate", "archive_date"]
+title = ["title", "trans-title"]
+authors = ["author", "last", "first", "last1", "first1", "last2", "first2", "authors", "coauthors"]
+date_raw = ["date", "datepublished"]
+year = ["year"]
+publisher = ["publisher"]
+work = ["website", "work", "newspaper", "journal", "magazine"]
+language = ["language", "lang"]
+isbn = ["isbn"]
+doi = ["doi"]
+access_date_raw = ["access-date", "accessdate"]
+
+[[template]]
+name = "cite news"
+aliases = ["cite magazine", "cite press release"]
+role = "citation"
+family = "news"
+[template.fields]
+url = ["url"]
+archive_url = ["archive-url", "archiveurl", "archive_url"]
+archive_date_raw = ["archive-date", "archivedate", "archive_date"]
+title = ["title", "trans-title"]
+authors = ["author", "last", "first", "last1", "first1", "last2", "first2", "authors", "coauthors"]
+date_raw = ["date", "datepublished"]
+year = ["year"]
+publisher = ["publisher"]
+work = ["work", "newspaper", "website", "magazine", "agency"]
+language = ["language", "lang"]
+isbn = ["isbn"]
+doi = ["doi"]
+access_date_raw = ["access-date", "accessdate"]
+
+[[template]]
+name = "cite book"
+aliases = []
+role = "citation"
+family = "book"
+[template.fields]
+url = ["url"]
+archive_url = ["archive-url", "archiveurl", "archive_url"]
+archive_date_raw = ["archive-date", "archivedate", "archive_date"]
+title = ["title", "trans-title"]
+authors = ["author", "last", "first", "last1", "first1", "last2", "first2", "authors", "coauthors"]
+date_raw = ["date", "datepublished"]
+year = ["year"]
+publisher = ["publisher"]
+work = ["series"]
+language = ["language", "lang"]
+isbn = ["isbn"]
+doi = ["doi"]
+access_date_raw = ["access-date", "accessdate"]
+
+[[template]]
+name = "cite journal"
+aliases = []
+role = "citation"
+family = "journal"
+[template.fields]
+url = ["url"]
+archive_url = ["archive-url", "archiveurl", "archive_url"]
+archive_date_raw = ["archive-date", "archivedate", "archive_date"]
+title = ["title", "trans-title"]
+authors = ["author", "last", "first", "last1", "first1", "last2", "first2", "authors", "coauthors"]
+date_raw = ["date", "datepublished"]
+year = ["year"]
+publisher = ["publisher"]
+work = ["journal", "work"]
+language = ["language", "lang"]
+isbn = ["isbn"]
+doi = ["doi"]
+access_date_raw = ["access-date", "accessdate"]
+
+[[template]]
+name = "cite encyclopedia"
+aliases = []
+role = "citation"
+family = "encyclopedia"
+[template.fields]
+url = ["url"]
+archive_url = ["archive-url", "archiveurl", "archive_url"]
+archive_date_raw = ["archive-date", "archivedate", "archive_date"]
+title = ["title", "article", "entry"]
+authors = ["author", "last", "first", "last1", "first1", "last2", "first2", "authors", "coauthors"]
+date_raw = ["date", "datepublished"]
+year = ["year"]
+publisher = ["publisher"]
+work = ["encyclopedia", "work"]
+language = ["language", "lang"]
+isbn = ["isbn"]
+doi = ["doi"]
+access_date_raw = ["access-date", "accessdate"]
+
+[[template]]
+name = "книга"
+aliases = []
+role = "citation"
+family = "book"
+[template.fields]
+url = ["ссылка", "url"]
+archive_url = ["archive-url", "archiveurl", "архив"]
+archive_date_raw = ["archive-date", "archivedate", "архив дата"]
+title = ["заглавие", "название"]
+authors = ["автор"]
+year = ["год"]
+publisher = ["издательство"]
+language = ["язык", "lang"]
+isbn = ["isbn", "ISBN"]
+doi = ["doi"]
+access_date_raw = ["access-date", "accessdate", "дата обращения"]
+date_raw = ["дата"]
+
+[[template]]
+name = "статья"
+aliases = []
+role = "citation"
+family = "journal"
+[template.fields]
+url = ["ссылка", "url"]
+archive_url = ["archive-url", "archiveurl", "архив"]
+archive_date_raw = ["archive-date", "archivedate", "архив дата"]
+title = ["заглавие", "название"]
+authors = ["автор"]
+year = ["год"]
+publisher = ["издательство"]
+language = ["язык", "lang"]
+isbn = ["isbn", "ISBN"]
+doi = ["doi"]
+access_date_raw = ["access-date", "accessdate", "дата обращения"]
+work = ["издание"]
+
+[[template]]
+name = "публикация"
+aliases = []
+role = "citation"
+family = "other_template"
+[template.fields]
+url = ["ссылка", "url"]
+archive_url = ["archive-url", "archiveurl", "архив"]
+archive_date_raw = ["archive-date", "archivedate", "архив дата"]
+title = ["заглавие", "название"]
+authors = ["автор"]
+year = ["год"]
+publisher = ["издательство"]
+language = ["язык", "lang"]
+isbn = ["isbn", "ISBN"]
+doi = ["doi"]
+access_date_raw = ["access-date", "accessdate", "дата обращения"]
+work = ["издание"]
+
+[[template]]
+name = "webarchive"
+aliases = []
+role = "citation"
+family = "web"
+archive_wrapper = true
+[template.fields]
+archive_url = ["url"]
+archive_date_raw = ["date"]
+
+[[template]]
+name = "wayback"
+aliases = []
+role = "citation"
+family = "web"
+archive_wrapper = true
+[template.fields]
+archive_url = ["url"]
+archive_date_raw = ["date"]
+
+[[template]]
+name = "sfn"
+aliases = ["sfnp", "sfn0"]
+role = "footnote"
+family = "short"
+[template.fields]
+harv_names = ["1", "2", "3", "4"]
+harv_ref = ["ref"]
+
+[[template]]
+name = "efn"
+aliases = []
+role = "footnote"
+family = "explanatory"
+
+[[template]]
+name = "комментарий"
+aliases = []
+role = "footnote"
+family = "explanatory"
+
+[[template]]
+name = "примечания"
+aliases = []
+role = "ref_list"
+family = "notes"
+
+[[template]]
+name = "reflist"
+aliases = []
+role = "ref_list"
+family = "notes"
+
+[[template]]
+name = "список примечаний"
+aliases = []
+role = "ref_list"
+family = "notes"
+
+[[template]]
+name = "notelist"
+aliases = []
+role = "ref_list"
+family = "comments"
+
+[[template]]
+name = "комментарии"
+aliases = []
+role = "ref_list"
+family = "comments"
+
+[[template]]
+name = "недоступная ссылка"
+aliases = []
+role = "link_status"
+
+[[template]]
+name = "dead link"
+aliases = []
+role = "link_status"

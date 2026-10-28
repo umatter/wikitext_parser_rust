@@ -1,0 +1,18 @@
+# Section roles. Titles are normalised like the walk's `title_norm` (lowercase, whitespace collapsed).
+# A title with no entry has the role "content".
+
+[[section]]
+role = "notes"
+titles = ["примечания", "комментарии"]
+
+[[section]]
+role = "bibliography"
+titles = ["литература", "источники"]
+
+[[section]]
+role = "external_links"
+titles = ["ссылки"]
+
+[[section]]
+role = "see_also"
+titles = ["см. также"]

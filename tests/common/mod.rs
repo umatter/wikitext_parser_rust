@@ -49,9 +49,9 @@ pub fn defaults() -> Limits {
     }
 }
 
-/// The registry (empty until Task 14 loads `config/registry/`).
+/// The registry of `config/registry/`.
 pub fn reg() -> Registry {
-    Registry::default()
+    Registry::load(Path::new("config/registry")).expect("registry loads")
 }
 
 fn test_key(site: &str) -> Key {

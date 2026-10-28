@@ -59,7 +59,7 @@ pub struct RunArgs {
     pub jobs: usize,
     pub limits: Limits,
     pub resume: bool,
-    /// Holds `sites/*.toml`; see `default_config_dir`.
+    /// Holds `sites/*.toml` and `registry/{templates,sections}.toml`; see `default_config_dir`.
     pub config_dir: PathBuf,
 }
 
@@ -105,6 +105,7 @@ pub struct Manifest {
     pub vendored_patches: Vec<String>,
     pub vendored_src_sha256: String,
     pub settings_hashes: BTreeMap<String, String>,
+    /// sha256 of the registry's two files; see `Registry::hash`.
     pub registry_hash: Option<String>,
     pub args: Value,
     pub inputs: Vec<InputEntry>,
@@ -598,6 +599,7 @@ fn write_atomic(path: &Path, text: &str) -> Result<()> {
 pub fn run(args: &RunArgs) -> Result<Manifest> {
     let tables = selected_tables(args)?;
     let sites = load_sites(&args.config_dir)?;
+    let registry = Registry::load(&args.config_dir.join("registry"))?;
     let mut settings_hashes = BTreeMap::new();
     for l in &args.labels {
         let s = sites
@@ -632,7 +634,6 @@ pub fn run(args: &RunArgs) -> Result<Manifest> {
         n => n,
     };
     let pool = rayon::ThreadPoolBuilder::new().num_threads(jobs).stack_size(WORKER_STACK).build()?;
-    let registry = Registry::default();
     let mut manifest = Manifest {
         schema_version: SCHEMA_VERSION.to_string(),
         crate_version: env!("CARGO_PKG_VERSION").to_string(),
@@ -641,8 +642,7 @@ pub fn run(args: &RunArgs) -> Result<Manifest> {
         vendored_patches: VENDORED_PATCHES.iter().map(|p| p.to_string()).collect(),
         vendored_src_sha256: VENDORED_SRC_SHA256.to_string(),
         settings_hashes,
-        // Task 14 loads config/registry/ and records its hash.
-        registry_hash: None,
+        registry_hash: Some(registry.hash()),
         args: args_json(args, jobs, &tables),
         inputs: vec![],
         outputs: vec![],

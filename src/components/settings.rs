@@ -167,19 +167,7 @@ impl Settings {
     /// Template name as the registry keys it: namespace 10 prefix stripped, `_` as a space, whitespace
     /// collapsed and trimmed, first character lowercased.
     pub fn template_name(&self, raw: &str) -> String {
-        let spaced = raw.replace('_', " ");
-        let mut name = spaced.trim();
-        if let Some((prefix, rest)) = name.split_once(':') {
-            if self.namespace(prefix) == Some(10) {
-                name = rest;
-            }
-        }
-        let collapsed = name.split_whitespace().collect::<Vec<_>>().join(" ");
-        let mut chars = collapsed.chars();
-        match chars.next() {
-            Some(c) => c.to_lowercase().chain(chars).collect(),
-            None => String::new(),
-        }
+        normalize_template_name(raw, |prefix| self.namespace(prefix) == Some(10))
     }
 
     pub fn is_variable(&self, name: &str) -> bool {
@@ -207,6 +195,24 @@ impl Settings {
 
     fn knows_tag(&self, t: &str) -> bool {
         self.extension_tags.contains(t) || self.html_tags.contains(t)
+    }
+}
+
+/// The rule behind `Settings::template_name`, shared with the registry: `_` as a space, trimmed, a prefix
+/// accepted by `is_template_ns` stripped, whitespace collapsed, first character lowercased.
+pub fn normalize_template_name(raw: &str, is_template_ns: impl Fn(&str) -> bool) -> String {
+    let spaced = raw.replace('_', " ");
+    let mut name = spaced.trim();
+    if let Some((prefix, rest)) = name.split_once(':') {
+        if is_template_ns(prefix) {
+            name = rest;
+        }
+    }
+    let collapsed = name.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut chars = collapsed.chars();
+    match chars.next() {
+        Some(c) => c.to_lowercase().chain(chars).collect(),
+        None => String::new(),
     }
 }
 

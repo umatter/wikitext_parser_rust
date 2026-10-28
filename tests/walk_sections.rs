@@ -48,7 +48,8 @@ fn sections_and_paths() {
         c.sections.iter().map(|s| (s.id, s.level, s.title_text.as_str(), s.parent_section_id)).collect();
     assert_eq!(s, vec![(0, 0, "", 0), (1, 2, "История", 0), (2, 3, "Ранние годы", 1), (3, 2, "Примечания", 0)]);
     assert_eq!(c.sections[2].path, vec!["история", "ранние годы"]);
-    assert!(c.sections.iter().all(|s| s.role == "content")); // roles arrive with the registry (Task 14)
+    let roles: Vec<_> = c.sections.iter().map(|s| s.role.as_str()).collect();
+    assert_eq!(roles, ["content", "content", "content", "notes"]);
 }
 
 #[test]

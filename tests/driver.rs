@@ -10,6 +10,7 @@ use arrow::datatypes::{DataType, Field, Schema};
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use parquet::arrow::ArrowWriter;
 use serde_json::Value;
+use sha2::Digest;
 use wikitext_components::model::*;
 use wikitext_components::output::{self, PartWriter};
 use wikitext_components::settings::Settings;
@@ -222,7 +223,11 @@ fn manifest_records_hashes_and_counts() {
     assert_eq!(m["crate_version"], env!("CARGO_PKG_VERSION"));
     assert_eq!(m["vendored_upstream"], "bc6bde5");
     assert!(!m["git_commit"].as_str().unwrap().is_empty());
-    assert!(m["registry_hash"].is_null());
+    let mut reg_bytes = fs::read("config/registry/templates.toml").unwrap();
+    reg_bytes.extend(fs::read("config/registry/sections.toml").unwrap());
+    let want: String = sha2::Sha256::digest(&reg_bytes).iter().map(|b| format!("{b:02x}")).collect();
+    assert_eq!(want.len(), 64);
+    assert_eq!(m["registry_hash"], want);
     assert_eq!(m["args"]["jobs"], 4);
     assert_eq!(m["inputs"][0]["path"], CORPUS);
     assert_eq!(m["inputs"][0]["rows"], 180);
@@ -302,6 +307,35 @@ fn unknown_site_fails_before_any_output() {
     let err = String::from_utf8_lossy(&o.stderr);
     assert!(err.contains("unknown site 'nosuch' (no config/sites file)"), "{err}");
     assert!(!out.exists(), "output written before the label check");
+    let _ = fs::remove_dir_all(&d);
+}
+
+#[test]
+fn missing_or_invalid_registry_fails_before_any_output() {
+    let d = tmp("bad_registry");
+    let cfg = d.join("config");
+    fs::create_dir_all(cfg.join("sites")).unwrap();
+    fs::copy("config/sites/ru.wikipedia.toml", cfg.join("sites").join("a.toml")).unwrap();
+    let out = d.join("out");
+    let run = || {
+        cli(&args(&[
+            "--input", "tests/fixtures/refs_basic.wiki", "--label", "wikipedia:adhoc", "--out", &s(&out),
+            "--config-dir", &s(&cfg),
+        ]))
+    };
+    let o = run();
+    assert!(!o.status.success());
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(err.contains("registry") && err.contains("templates.toml"), "{err}");
+    assert!(!out.exists());
+    fs::create_dir_all(cfg.join("registry")).unwrap();
+    fs::write(cfg.join("registry").join("templates.toml"), "[[template]]\nname = \"a\"\nrole = \"bogus\"\n").unwrap();
+    fs::write(cfg.join("registry").join("sections.toml"), "").unwrap();
+    let o = run();
+    assert!(!o.status.success());
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(err.contains("bogus") && err.contains("templates.toml"), "{err}");
+    assert!(!out.exists());
     let _ = fs::remove_dir_all(&d);
 }
 
