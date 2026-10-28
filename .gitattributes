@@ -1,1 +1,3 @@
 config/** text eol=lf
+tests/expected/*.sha256 text eol=lf
+tests/expected/structured/* text eol=lf
