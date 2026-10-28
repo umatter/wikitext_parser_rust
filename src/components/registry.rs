@@ -9,6 +9,7 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
 use crate::fingerprint;
+use crate::model::PageOutput;
 use crate::settings::normalize_template_name;
 
 pub const ROLES: &[&str] = &[
@@ -208,6 +209,32 @@ impl Registry {
     /// (entry name, alias as written in the file) for every alias.
     pub fn all_aliases(&self) -> Vec<(String, String)> {
         self.aliases.clone()
+    }
+
+    /// Each template name found inside refs in `outputs`, its count, and whether it has an entry on `site`;
+    /// sorted by count, descending, then by name. A template is inside a ref when its span lies inside the
+    /// span of a ref other than itself: a footnote template (a ref of kind `template`) counts only when it
+    /// sits inside another ref, and what its body holds counts. Templates in a ref list's own markup do not.
+    ///
+    /// A method rather than the free function `in_ref_coverage(outputs, site)` of the plan: whether a name
+    /// "has a registry entry" needs the registry, and the rows' `role` cannot tell an unlisted template from
+    /// an entry with role `other`.
+    pub fn in_ref_coverage(&self, outputs: &[PageOutput], site: &str) -> Vec<(String, usize, bool)> {
+        let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
+        for o in outputs {
+            let mut spans: Vec<(i32, i32)> = o.components.refs.iter().map(|r| (r.start, r.end)).collect();
+            spans.sort_unstable();
+            for t in &o.components.templates {
+                let before = &spans[..spans.partition_point(|&(s, _)| s <= t.start)];
+                if before.iter().rev().any(|&(s, e)| t.end <= e && (s, e) != (t.start, t.end)) {
+                    *counts.entry(t.name.as_str()).or_default() += 1;
+                }
+            }
+        }
+        let mut v: Vec<(String, usize, bool)> =
+            counts.into_iter().map(|(name, n)| (name.to_string(), n, self.template(name, site).is_some())).collect();
+        v.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+        v
     }
 
     /// sha256 of `templates.toml` followed by `sections.toml`, as lowercase hex. Empty for `default()`.

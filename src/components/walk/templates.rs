@@ -15,8 +15,9 @@
 //! - Positional parameters count from 1 in order. `N=` names a parameter `N` and does not advance the
 //!   count (MediaWiki). Duplicates are all kept, in source order.
 //! - `ParamRow.start`/`end` is the span the parser reports for the parameter, clamped to the text.
-//! - A template inside another template (in a name or a parameter value, however deep in links or tags)
-//!   has that template as its parent and a depth one greater.
+//! - The parent (`parent_type`, `parent_id`) is the nearest enclosing component, which the walk gives: a
+//!   template (in a name or a parameter value, however deep in links or tags) or a ref. A template inside a
+//!   ref inside a template has the ref as its parent. `depth` counts the templates around it.
 //! - `fp` is over the name and the `name=norm(value_text)` pairs, sorted by name (stable).
 
 use parse_wiki_text_2::{Node, Parameter, Positioned};
@@ -27,7 +28,7 @@ use crate::registry::Registry;
 use crate::settings::Settings;
 use crate::spans::CharIndex;
 
-use super::Place;
+use super::{Parent, Place};
 
 struct Open {
     row: usize,
@@ -82,11 +83,17 @@ impl<'t, 's> Templates<'t, 's> {
         self.open.last().and_then(|o| o.split_from)
     }
 
-    /// A template node is entered at `place`.
-    pub(super) fn enter(&mut self, node: &Node, place: Place) {
-        let Node::Template { name: name_nodes, start, end, .. } = node else { return };
+    /// A template node with these name nodes and span is entered at `place`, inside `parent`. Returns the
+    /// row's id.
+    pub(super) fn enter(
+        &mut self,
+        name_nodes: &[Node],
+        (start, end): (usize, usize),
+        place: Place,
+        parent: Parent,
+    ) -> usize {
         let len = self.text.len();
-        let (start, end) = (*start.min(&len), (*end).min(len).max(*start.min(&len)));
+        let (start, end) = (start.min(len), end.min(len).max(start.min(len)));
         let (name_start, name_end) = trimmed_span(self.text, name_nodes);
         let name_raw = self.text.get(name_start..name_end).unwrap_or("");
         // The first colon in the name's own text.
@@ -120,9 +127,10 @@ impl<'t, 's> Templates<'t, 's> {
             .registry
             .template(&name, self.settings.site())
             .map_or_else(|| "other".to_string(), |e| e.role.clone());
-        let (parent_type, parent_id, depth) = match self.open.last() {
-            Some(o) => (Some("template".to_string()), Some(o.row as i32), self.rows[o.row].depth + 1),
-            None => (None, None, 0),
+        let depth = self.open.last().map_or(0, |o| self.rows[o.row].depth + 1);
+        let (parent_type, parent_id) = match parent {
+            Some((t, id)) => (Some(t.to_string()), Some(id)),
+            None => (None, None),
         };
         let mut params = Vec::new();
         if let Some(c) = split {
@@ -166,6 +174,12 @@ impl<'t, 's> Templates<'t, 's> {
             split_from: split.map(|c| c + 1),
             pending: String::new(),
         });
+        id
+    }
+
+    /// The row of template `id`.
+    pub(super) fn row(&self, id: usize) -> &TemplateRow {
+        &self.rows[id]
     }
 
     /// The name part of the open template closes with the text after its colon. Order: the colon
@@ -215,15 +229,16 @@ impl<'t, 's> Templates<'t, 's> {
         self.rows[o.row].params.push(row);
     }
 
-    /// The open template closes.
-    pub(super) fn close(&mut self) {
-        let Some(o) = self.open.pop() else { return };
+    /// The open template closes. Returns its id.
+    pub(super) fn close(&mut self) -> Option<usize> {
+        let o = self.open.pop()?;
         let row = &mut self.rows[o.row];
         let mut pairs: Vec<(&str, String)> =
             row.params.iter().map(|p| (p.name.as_str(), format!("{}={}", p.name, norm(&p.value_text)))).collect();
         pairs.sort_by(|a, b| a.0.cmp(b.0));
         let joined = pairs.into_iter().map(|(_, s)| s).collect::<Vec<_>>().join("\u{1f}");
         row.fp = fp(&format!("{}\u{1f}{}", row.name, joined));
+        Some(o.row)
     }
 
     /// The rows, each with its `para_id` and `para_offset` resolved by `resolve`.

@@ -77,12 +77,33 @@ fn run_settings(text: Option<&str>, settings: &Settings, site: &str, limits: &Li
 
 /// Process `text` on site `wikipedia` (Russian Wikipedia settings) or `ruwiki`.
 pub fn run_page(text: &str, site: &str) -> PageOutput {
-    let settings = if site == "ruwiki" {
+    run_settings(Some(text), &settings_for(site), site, &defaults())
+}
+
+/// Settings of a site: `ruwiki`, or Russian Wikipedia for anything else.
+pub fn settings_for(site: &str) -> Settings {
+    if site == "ruwiki" {
         Settings::load(Path::new("config/sites/ruwiki.toml")).expect("ruwiki settings load")
     } else {
         ru()
-    };
-    run_settings(Some(text), &settings, site, &defaults())
+    }
+}
+
+/// Process every corpus row on `site`, with the defaults, in row order.
+pub fn run_rows(rows: &[CorpusRow], site: &str) -> Vec<PageOutput> {
+    let (settings, registry) = (settings_for(site), reg());
+    rows.iter()
+        .enumerate()
+        .map(|(i, r)| {
+            let input = PageInput {
+                key: Key { row: i as i32, page_id: r.page_id.clone(), version: r.version.clone(), ..test_key(site) },
+                title: Some(r.page_title.clone()),
+                timestamp: None,
+                text: Some(r.wikitext.clone()),
+            };
+            page::process_page(&input, &settings, &registry, &defaults())
+        })
+        .collect()
 }
 
 /// Process `text` on site `wikipedia` with the given limits.

@@ -19,12 +19,20 @@
 //! `enter`, so a component whose own `enter` breaks the paragraph (a table, a list, a preformatted block)
 //! would be placed in the paragraph before it; no component of milestones 0-2 is of that kind.
 //! - Task 13b (templates): enter `Node::Template` in `Walker::enter_node`; give each parameter's
-//!   `Part::Value` a `Sink::Flat` (its `value_text`) and the template as the parent of what it contains.
-//! - Task 15 (refs, ref lists): enter `Node::Tag` named `ref` or `references`, and footnote and ref-list
-//!   templates; a ref body is a `Sink::Flat` (its `body_text`).
+//!   `Part::Value` a `Sink::Flat` (its `value_text`).
+//! - Task 15 (refs, ref lists): enter `Node::Tag` named `ref` or `references`, and templates whose registry
+//!   role is `footnote` or `ref_list` (`refs.rs`); a tag ref's body is a `Sink::Flat` (its `body_text`).
 //! - Task 16 (citations): citation templates and external links inside ref bodies, found from the same
 //!   enter and exit events.
+//!
+//! # Parents
+//!
+//! `parent_type` and `parent_id` name the nearest enclosing component of any table. `Walker::parents` holds
+//! the open ones: a template while the walk is inside it, a ref while it is inside the ref's body. A
+//! footnote template is both, the ref innermost, so what it contains belongs to the ref. A ref list is no
+//! parent: what it contains belongs to whatever is around the list.
 
+mod refs;
 mod sections;
 mod templates;
 mod text;
@@ -38,6 +46,7 @@ use crate::registry::Registry;
 use crate::settings::Settings;
 use crate::spans::CharIndex;
 
+use refs::Refs;
 use sections::Sections;
 use templates::Templates;
 use text::{Flat, ParaKind, TextBuilder};
@@ -102,16 +111,22 @@ pub fn walk(
     let mut w = Walker::new(text, settings, registry, &chars);
     tree::traverse(&parsed.output.nodes, limits, &mut w)?;
     w.paras.break_paragraph(ParaKind::Prose);
-    // Component rows collected during the walk get their `para_id` and `para_offset` here, with
-    // `w.resolve`, now that every paragraph is closed and before `finish` consumes the builder.
-    let templates = std::mem::replace(&mut w.templates, Templates::new(text, &chars, settings, registry));
-    let templates = templates.finish(|place| w.resolve(place));
-    Ok(Components {
-        templates,
-        sections: w.sections.finish(text, &chars, registry),
-        paragraphs: w.paras.finish(),
-        ..Components::default()
-    })
+    // Component rows collected during the walk get their `para_id` and `para_offset` here, now that every
+    // paragraph is closed and before `finish` consumes the paragraph builder.
+    let Walker { paras, templates, refs, sections, .. } = w;
+    let resolve = |place| resolve_place(&paras, place);
+    let templates = templates.finish(resolve);
+    let (refs, ref_lists) = refs.finish(resolve);
+    let sections = sections.finish(text, &chars, registry);
+    Ok(Components { templates, refs, ref_lists, sections, paragraphs: paras.finish(), ..Components::default() })
+}
+
+/// `para_id` and `para_offset` of a place, once every paragraph is closed.
+fn resolve_place(paras: &TextBuilder, place: Place) -> (Option<i32>, Option<i32>) {
+    match place.para.and_then(|(slot, offset)| paras.para_id(slot).map(|id| (id, offset))) {
+        Some((id, offset)) => (Some(id), Some(offset)),
+        None => (None, None),
+    }
 }
 
 /// The nodes the walk of `parsed` visits and the deepest nesting it meets, counted by the walk's own rules.
@@ -178,6 +193,9 @@ enum Owner {
     Param,
 }
 
+/// The nearest enclosing component: its table (`"template"`, `"ref"`) and id.
+type Parent = Option<(&'static str, i32)>;
+
 /// Where a component sits, as the walk meets it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Place {
@@ -191,6 +209,9 @@ struct Walker<'t, 's> {
     settings: &'s Settings,
     paras: TextBuilder<'t>,
     templates: Templates<'t, 's>,
+    refs: Refs<'t>,
+    /// The open components that are parents of what they contain, innermost last (see "Parents").
+    parents: Vec<(&'static str, i32)>,
     sections: Sections,
     /// The current section.
     section: i32,
@@ -231,6 +252,8 @@ impl<'t, 's> Walker<'t, 's> {
             settings,
             paras: TextBuilder::new(text, chars),
             templates: Templates::new(text, chars, settings, registry),
+            refs: Refs::new(text, chars),
+            parents: Vec::new(),
             sections: Sections::new(),
             section: 0,
             flats: Vec::new(),
@@ -257,12 +280,8 @@ impl<'t, 's> Walker<'t, 's> {
         Place { section_id: self.section, para }
     }
 
-    /// `para_id` and `para_offset` of a place, once every paragraph is closed.
-    fn resolve(&self, place: Place) -> (Option<i32>, Option<i32>) {
-        match place.para.and_then(|(slot, offset)| self.paras.para_id(slot).map(|id| (id, offset))) {
-            Some((id, offset)) => (Some(id), Some(offset)),
-            None => (None, None),
-        }
+    fn parent(&self) -> Parent {
+        self.parents.last().copied()
     }
 
     fn add_text(&mut self, sink: Sink, s: &str, start: usize) {
@@ -434,14 +453,35 @@ impl<'t, 's> Walker<'t, 's> {
                 c.url = true;
             }
             Node::Tag { name, .. } => {
+                let place = self.place();
                 self.touch(around, start, end);
                 if EXCLUDED_TAGS.contains(&name.as_ref()) {
                     self.exclude(around, c);
                 }
+                match name.as_ref() {
+                    "ref" => {
+                        let id = self.refs.enter_tag(start, end, place, self.parent());
+                        self.parents.push(("ref", id));
+                        self.flats.push(Flat::default());
+                        c.sink = Sink::Flat(self.flats.len() - 1);
+                    }
+                    "references" => self.refs.enter_list_tag(start, end, place, self.parent()),
+                    _ => {}
+                }
             }
-            Node::Template { .. } => {
-                let place = self.place();
-                self.templates.enter(node, place);
+            Node::Template { name, .. } => {
+                let (place, parent) = (self.place(), self.parent());
+                let id = self.templates.enter(name, (start, end), place, parent);
+                self.parents.push(("template", id as i32));
+                let row = self.templates.row(id);
+                match row.role.as_str() {
+                    "footnote" => {
+                        let r = self.refs.enter_template(row, place, parent);
+                        self.parents.push(("ref", r));
+                    }
+                    "ref_list" => self.refs.enter_list_template(row, place, parent),
+                    _ => {}
+                }
                 self.touch(around, start, end);
                 self.exclude(around, c);
                 c.owner = Owner::Template;
@@ -484,7 +524,30 @@ impl<'t, 's> Walker<'t, 's> {
                 let id = self.headings.pop().expect("pushed on enter");
                 self.sections.set_title(id, title);
             }
-            Node::Template { .. } => self.templates.close(),
+            Node::Tag { name, .. } => match name.as_ref() {
+                "ref" => {
+                    debug_assert_eq!(c.sink, Sink::Flat(self.flats.len() - 1));
+                    let body = self.flats.pop().expect("pushed on enter").into_text();
+                    self.refs.close_tag(body);
+                    self.parents.pop();
+                }
+                "references" => self.refs.close_list(None),
+                _ => {}
+            },
+            Node::Template { .. } => {
+                if let Some(id) = self.templates.close() {
+                    let row = self.templates.row(id);
+                    match row.role.as_str() {
+                        "footnote" => {
+                            self.refs.close_template(row);
+                            self.parents.pop();
+                        }
+                        "ref_list" => self.refs.close_list(Some(row)),
+                        _ => {}
+                    }
+                }
+                self.parents.pop();
+            }
             Node::Link { .. } => self.after_link = Some(node.end()),
             Node::Preformatted { .. } => {
                 if c.sink == Sink::Para {
@@ -610,7 +673,7 @@ mod tests {
         p.seen
             .iter()
             .map(|(at, place)| {
-                let (id, offset) = p.w.resolve(*place);
+                let (id, offset) = resolve_place(&p.w.paras, *place);
                 (*at, place.section_id, id, offset)
             })
             .collect()

@@ -201,3 +201,59 @@ fn walk_roles_come_from_the_registry() {
     assert_eq!(c.templates[0].role, "citation");
     assert_eq!(c.templates[1].role, "other");
 }
+
+#[test]
+fn in_ref_coverage_counts_templates_inside_refs() {
+    // Inside refs: {{нечто}} twice (nested), {{cite web}}, {{sfn}} (a footnote template inside a ref), and what
+    // an {{efn}} body holds. Not inside: the {{efn}}s themselves, {{вне}}, and a template in a ref list.
+    let text = "А<ref>{{cite web|url=x}} {{нечто|{{нечто}}}} {{sfn|Б|1990}}</ref>{{efn|{{нечто внутри}}}}{{efn|y}} {{вне}}\n<references>{{cite web|url=y}}</references>";
+    let outs = vec![run_page(text, "wikipedia")];
+    let cov = reg().in_ref_coverage(&outs, "wikipedia");
+    let want: Vec<(String, usize, bool)> = vec![
+        ("нечто".into(), 2, false),
+        ("cite web".into(), 1, true),
+        ("sfn".into(), 1, true),
+        ("нечто внутри".into(), 1, false),
+    ];
+    assert_eq!(cov, want);
+    assert!(reg().in_ref_coverage(&[], "wikipedia").is_empty());
+}
+
+/// Parses every row on `site` and requires that at most 1% of the template occurrences inside refs have no
+/// registry entry. Prints the shares and the most frequent in-ref names (test output only, never committed).
+fn assert_coverage(rows: Vec<wikitext_components::corpus::CorpusRow>, site: &str) {
+    let outputs = common::run_rows(&rows, site);
+    assert!(outputs.iter().all(|o| o.page.status == "ok"), "a page did not parse");
+    let cov = reg().in_ref_coverage(&outputs, site);
+    let total: usize = cov.iter().map(|c| c.1).sum();
+    let unclassified: Vec<&(String, usize, bool)> = cov.iter().filter(|c| !c.2).collect();
+    let missing: usize = unclassified.iter().map(|c| c.1).sum();
+    let share = missing as f64 / total.max(1) as f64;
+    eprintln!(
+        "{site}: {} versions, {total} in-ref template occurrences of {} names, {missing} unclassified ({:.2}%)",
+        rows.len(),
+        cov.len(),
+        100.0 * share
+    );
+    for (name, n, known) in cov.iter().take(20) {
+        eprintln!("  top in-ref: {n:>6} {name} {}", if *known { "" } else { "(unclassified)" });
+    }
+    assert!(total > 0, "no templates inside refs");
+    if share > 0.01 {
+        for (name, n, _) in unclassified.iter().take(30) {
+            eprintln!("  unclassified: {n:>6} {name}");
+        }
+        panic!("{site}: {:.2}% of in-ref template occurrences are unclassified (limit 1%)", 100.0 * share);
+    }
+}
+
+#[test]
+fn in_ref_templates_are_classified_public() {
+    assert_coverage(common::public_corpus(), "wikipedia");
+}
+
+#[test]
+fn in_ref_templates_are_classified_private() {
+    let Some(rows) = common::private_corpus("in_ref_templates_are_classified_private") else { return };
+    assert_coverage(rows, "ruwiki");
+}

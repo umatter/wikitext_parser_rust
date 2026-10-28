@@ -22,7 +22,8 @@
 //!   `chem`, `ce`, `gallery`, `templatestyles`, `score`, `timeline`, `graph`, `mapframe`, `maplink`,
 //!   `syntaxhighlight`, `source`, `templatedata`, `imagemap`, `inputbox`, `categorytree`, `hiero`,
 //!   `indicator` and `includeonly` (shown only where the page is transcluded) add nothing. Any other
-//!   extension tag adds its content, `noinclude` and `onlyinclude` among them.
+//!   extension tag adds its content, `noinclude` and `onlyinclude` among them. A `ref`'s content, under
+//!   these rules, is the ref's `body_text` instead (`refs.rs`).
 //! - **Excluded** (add nothing): templates, template parameters (`{{{1}}}`), files, categories, comments,
 //!   magic words, tables, and the extension tags listed above. Components inside an excluded node take the
 //!   `para_id` and `para_offset` of the outermost excluded node around them.
