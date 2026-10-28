@@ -81,7 +81,7 @@ pub struct WalkStats {
 }
 
 /// Extension tags whose content adds nothing to the text (`text.rs`).
-const EXCLUDED_TAGS: [&str; 21] = [
+pub(crate) const EXCLUDED_TAGS: [&str; 21] = [
     "ref",
     "references",
     "math",
@@ -264,6 +264,26 @@ fn label_of(nodes: &[Node]) -> Option<String> {
     (!label.is_empty()).then_some(label)
 }
 
+/// An interlanguage link: its target starts with a language prefix and no colon.
+pub(crate) fn is_interlanguage(settings: &Settings, target: &str) -> bool {
+    match target.split_once(':') {
+        Some((prefix, _)) if !target.starts_with(':') => {
+            settings.namespace(prefix).is_none() && settings.is_language_prefix(prefix)
+        }
+        _ => false,
+    }
+}
+
+/// A link target as a title: without a leading colon and without a namespace prefix.
+pub(crate) fn link_title<'x>(settings: &Settings, target: &'x str) -> &'x str {
+    let t = target.trim();
+    let t = t.strip_prefix(':').unwrap_or(t);
+    match t.split_once(':') {
+        Some((prefix, rest)) if settings.namespace(prefix).is_some() => rest.trim(),
+        _ => t,
+    }
+}
+
 /// Where a component sits, as the walk meets it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Place {
@@ -384,24 +404,12 @@ impl<'t, 's> Walker<'t, 's> {
         }));
     }
 
-    /// An interlanguage link: its target starts with a language prefix and no colon.
     fn is_interlanguage(&self, target: &str) -> bool {
-        match target.split_once(':') {
-            Some((prefix, _)) if !target.starts_with(':') => {
-                self.settings.namespace(prefix).is_none() && self.settings.is_language_prefix(prefix)
-            }
-            _ => false,
-        }
+        is_interlanguage(self.settings, target)
     }
 
-    /// A link target as a title: without a leading colon and without a namespace prefix.
     fn link_title<'x>(&self, target: &'x str) -> &'x str {
-        let t = target.trim();
-        let t = t.strip_prefix(':').unwrap_or(t);
-        match t.split_once(':') {
-            Some((prefix, rest)) if self.settings.namespace(prefix).is_some() => rest.trim(),
-            _ => t,
-        }
+        link_title(self.settings, target)
     }
 
     /// Whether the link starting at `start` has a label (`[[target|label]]`). A target never contains `|`

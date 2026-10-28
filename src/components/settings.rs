@@ -30,6 +30,15 @@ struct Raw {
     interwiki_prefixes: Vec<String>,
 }
 
+/// How the parser reads a tag name.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TagClass {
+    /// An extension tag (`ref`, `nowiki`, `gallery`): an element with content, or self-closing.
+    Extension,
+    /// An HTML tag (`span`, `br`, `pre`): a start or end tag on its own.
+    Html,
+}
+
 pub struct Settings {
     site: String,
     hash: String,
@@ -46,6 +55,10 @@ pub struct Settings {
     parser_functions: HashSet<String>,
     language_prefixes: HashSet<String>,
     interwiki_prefixes: HashSet<String>,
+    /// URL protocols that open an external link (`[https://…]`), lowercased.
+    protocols: Vec<String>,
+    /// The tag names the parser recognises, by class.
+    tag_classes: HashMap<String, TagClass>,
 }
 
 /// Lowercase, `_` as a space, whitespace collapsed and trimmed.
@@ -94,6 +107,24 @@ impl Settings {
             redirect_magic_words: &redirect,
         });
 
+        // The parser's own reading of each tag name the site lists: it keeps a fixed set of HTML tags of its
+        // own, which wins over an extension tag of the same name (`pre`), and ignores other HTML tags.
+        let tag_classes = raw
+            .extension_tags
+            .iter()
+            .chain(&raw.html_tags)
+            .filter_map(|name| {
+                let name = name.to_lowercase();
+                let probe = format!("<{name}/>");
+                let class = match crate::frontend::parse(&probe, &configuration, 0).ok()?.output.nodes.first()? {
+                    parse_wiki_text_2::Node::Tag { .. } => TagClass::Extension,
+                    parse_wiki_text_2::Node::StartTag { .. } => TagClass::Html,
+                    _ => return None,
+                };
+                Some((name, class))
+            })
+            .collect();
+
         let image_patterns = raw
             .image_option_patterns
             .iter()
@@ -120,6 +151,8 @@ impl Settings {
             parser_functions: set(&raw.parser_functions),
             language_prefixes: set(&raw.language_prefixes),
             interwiki_prefixes: set(&raw.interwiki_prefixes),
+            protocols: raw.protocols.iter().map(|p| p.to_lowercase()).collect(),
+            tag_classes,
         })
     }
 
@@ -177,6 +210,18 @@ impl Settings {
     /// The word before the colon of `{{lc:x}}` or `{{#if:x}}`.
     pub fn is_parser_function(&self, word: &str) -> bool {
         self.parser_functions.contains(&norm(word))
+    }
+
+    /// Whether `s` starts with a URL protocol of the site (`https://`, `//`, `mailto:`), in any case: what
+    /// the parser needs after `[` to open an external link.
+    pub fn starts_with_protocol(&self, s: &str) -> bool {
+        let b = s.as_bytes();
+        self.protocols.iter().any(|p| b.len() >= p.len() && b[..p.len()].eq_ignore_ascii_case(p.as_bytes()))
+    }
+
+    /// How the parser reads a tag of this lowercased name; `None` when it reads it as text.
+    pub fn tag_class(&self, name: &str) -> Option<TagClass> {
+        self.tag_classes.get(name).copied()
     }
 
     /// Redirect words without the leading `#`.

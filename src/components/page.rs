@@ -4,6 +4,7 @@ use std::time::Instant;
 
 use parse_wiki_text_2::Node;
 
+use crate::fallback;
 use crate::frontend::{self, FrontendError, Parsed};
 use crate::model::{Components, Key, PageOutput, PageRow, TimingRow, WarningCount, WarningRow};
 use crate::registry::Registry;
@@ -76,11 +77,6 @@ fn walk(
 ) -> Result<Components, WalkError> {
     let limits = WalkLimits { budget: limits.walk_budget, depth_cap: limits.depth_cap };
     walk::walk(text, parsed, settings, registry, &limits)
-}
-
-/// Stub until Task 18: the fallback scanner.
-fn scan(_text: &str, _settings: &Settings, _registry: &Registry) -> Components {
-    Components::default()
 }
 
 fn warning_kind(m: &parse_wiki_text_2::WarningMessage) -> String {
@@ -158,7 +154,7 @@ pub fn process_page(
     registry: &Registry,
     limits: &Limits,
 ) -> PageOutput {
-    process_with(input, settings, registry, limits, &walk, &scan)
+    process_with(input, settings, registry, limits, &walk, &fallback::scan)
 }
 
 /// A page the watchdog quarantined in an earlier run (`quarantine.list`). It is not parsed again: it gets
@@ -169,7 +165,7 @@ pub fn hang_page(
     registry: &Registry,
     limits: &Limits,
 ) -> PageOutput {
-    hang_with(input, settings, registry, limits, &scan)
+    hang_with(input, settings, registry, limits, &fallback::scan)
 }
 
 fn hang_with(
