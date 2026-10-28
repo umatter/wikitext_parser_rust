@@ -10,8 +10,12 @@ fn field_json(f: &Field) -> Value {
     let mut meta: Vec<_> = f.metadata().iter().collect();
     meta.sort();
     let children: Vec<Value> = match f.data_type() {
-        DataType::List(c) | DataType::LargeList(c) => {
+        DataType::List(c) => {
             o.insert("type".into(), json!("List"));
+            vec![field_json(c)]
+        }
+        DataType::LargeList(c) => {
+            o.insert("type".into(), json!("LargeList"));
             vec![field_json(c)]
         }
         DataType::Struct(fs) => {
@@ -63,7 +67,8 @@ fn schemas_match_frozen_snapshot() {
     let want: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     assert_eq!(
         got, want,
-        "schema changed: bump SCHEMA_VERSION (minor: added column/table; major: rename/remove/meaning); \
+        "schema changed: bump SCHEMA_VERSION (minor: added column/table; major: rename/remove/meaning), \
+         add tests/schema/v<new>.json for the new schema and point this test at it; \
          {path} is frozen at 1.0.0 and is never rewritten"
     );
 }

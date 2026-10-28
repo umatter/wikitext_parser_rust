@@ -299,6 +299,18 @@ fn fp_inputs(table: &str) -> &'static [&'static str] {
     }
 }
 
+/// A row's field as its `fp` reads it: a template's parameters by name and `value_text` only, without their
+/// spans, which move with any edit before them.
+fn fp_input(row: &serde_json::Value, field: &str) -> Option<serde_json::Value> {
+    let v = row.get(field)?;
+    match (field, v) {
+        ("params", serde_json::Value::Array(params)) => Some(serde_json::Value::Array(
+            params.iter().map(|p| serde_json::json!({ "name": p.get("name"), "value_text": p.get("value_text") })).collect(),
+        )),
+        _ => Some(v.clone()),
+    }
+}
+
 /// A table's rows as (span, JSON value).
 fn table_rows(c: &Components, table: &str) -> Vec<((i32, i32), serde_json::Value)> {
     fn of<T: serde::Serialize>(rows: &[T], span: impl Fn(&T) -> (i32, i32)) -> Vec<((i32, i32), serde_json::Value)> {
@@ -331,7 +343,8 @@ fn class(v: &Violation, mine: &Components, theirs: &Components, at: Option<(i32,
             // have its counterpart while the missing one is elsewhere.
             return "same span and fp (surplus of a repeated fp)".to_string();
         }
-        let fields: Vec<&str> = fp_inputs(v.table).iter().copied().filter(|f| me.get(*f) != other.get(*f)).collect();
+        let fields: Vec<&str> =
+            fp_inputs(v.table).iter().copied().filter(|f| fp_input(me, f) != fp_input(other, f)).collect();
         return match fields.is_empty() {
             true => "same span, no fp input differs".to_string(),
             false => format!("same span, {} differ", fields.join("+")),

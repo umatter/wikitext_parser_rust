@@ -250,3 +250,32 @@ fn empty_plain_text_has_no_text() {
     assert_eq!((c[0].family.as_str(), c[0].text.clone()), ("plain_text", None));
     assert_eq!(c[0].fp, fp("plain_text\u{1f}"));
 }
+
+/// R73: a free URL that MediaWiki links is a `bare_link` row in a ref's body, outside citation templates and
+/// external links, with MediaWiki's characters and trailing-punctuation rule.
+#[test]
+fn free_urls_in_refs_are_bare_links() {
+    for (text, want) in common::FREE_URL_CASES {
+        let got: Vec<_> = cites(text)
+            .into_iter()
+            .map(|c| (c.family, c.url, c.host, c.title))
+            .collect();
+        let want: Vec<_> = want
+            .iter()
+            .map(|(f, u, h, t)| (f.to_string(), u.map(String::from), h.map(String::from), t.map(String::from)))
+            .collect();
+        assert_eq!(got, want, "{text:?}");
+    }
+    // The row spans the URL, and its fingerprint is the URL's.
+    let t = "<ref>См. http://a.ru/<!-- c -->x.</ref>";
+    let c = cites(t);
+    assert_eq!(&t[c[0].start as usize..c[0].end as usize], "http://a.ru/<!-- c -->x");
+    assert_eq!((c[0].ref_id, c[0].context.as_str()), (Some(0), "in_ref"));
+    assert_eq!(c[0].fp, fp("bare_link\u{1f}http://a.ru/x"));
+    // A footnote template's body is a ref's body.
+    let c = cites("{{efn|См. http://a.ru/x}}");
+    assert_eq!(c.iter().map(|x| (x.family.as_str(), x.url.as_deref())).collect::<Vec<_>>(), vec![("bare_link", Some("http://a.ru/x"))]);
+    // A dead-link mark in the same body marks it.
+    let c = cites("<ref>http://a.ru/x {{недоступная ссылка}}</ref>");
+    assert!(c[0].dead_link);
+}

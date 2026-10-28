@@ -219,11 +219,14 @@ fn unclosed_openers_are_not_components_and_their_text_stays() {
     let s: Vec<_> = c.sections.iter().map(|s| s.title_text.as_str()).collect();
     assert_eq!(s, vec!["", "H"]);
     assert_eq!((c.refs[0].section_id, c.templates[0].section_id), (1, 1));
-    // An unclosed `{{` inside a value is text.
-    let c = scan("<ref>{{cite web |url=http://a.ru |title=X</ref>");
+    // An unclosed `{{` inside a value is text, and so its URL is a free one (R73), as on the parsed path.
+    let t = "<ref>{{cite web |url=http://a.ru |title=X</ref>";
+    let c = scan(t);
     assert_eq!((c.templates.len(), c.refs.len()), (0, 1));
     assert_eq!(c.refs[0].body_text, "{{cite web |url=http://a.ru |title=X");
-    assert_eq!(c.citations[0].family, "plain_text");
+    let fam = |c: &Components| c.citations.iter().map(|x| (x.family.clone(), x.url.clone())).collect::<Vec<_>>();
+    assert_eq!(fam(&c), vec![("bare_link".to_string(), Some("http://a.ru".to_string()))]);
+    assert_eq!(fam(&c), fam(&run_page(t, "wikipedia").components));
     // A closer finds its opener under unclosed ones, which are dropped.
     let c = scan("{{a|<ref>x}} <ref>{{b|y</ref>");
     let v: Vec<_> = c.templates.iter().map(|x| x.name.as_str()).collect();
@@ -292,6 +295,19 @@ fn tags_are_case_insensitive_and_bodies_skip_nowiki_comments_and_pre() {
 /// a closing tag of an open element ends a comment or a `<nowiki>` it is met in, a heading's content runs
 /// through an element that spans lines, a link in a link's label makes the outer one text, and the `=`s of a
 /// heading line inside a template name its parameter.
+/// R73: the fallback finds the free URLs the walk finds, with the same rows (R52).
+#[test]
+fn free_urls_agree_with_the_parsed_path() {
+    let key = |c: &Components| {
+        c.citations.iter().map(|x| (x.start, x.end, x.family.clone(), x.url.clone(), x.host.clone(), x.fp.clone())).collect::<Vec<_>>()
+    };
+    for (t, _) in common::FREE_URL_CASES {
+        let a = run_page(t, "wikipedia");
+        assert_eq!(a.page.status, "ok", "{t:?}");
+        assert_eq!(key(&scan(t)), key(&a.components), "{t:?}");
+    }
+}
+
 #[test]
 fn malformed_markup_read_as_the_parser_reads_it() {
     let key = |c: &Components| {

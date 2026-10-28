@@ -6,6 +6,51 @@ use std::path::{Path, PathBuf};
 use wikitext_components::corpus::{self, CorpusRow};
 use wikitext_components::settings::Settings;
 
+/// Free URLs in and around refs (R73), for the walk's tests and the fallback's parity test: each text with the
+/// (family, url, host, title) of its citation rows.
+pub const FREE_URL_CASES: &[(&str, &[(&str, Option<&str>, Option<&str>, Option<&str>)])] = &[
+    // Trailing punctuation is not part of the URL.
+    ("<ref>http://a.ru/x.</ref>", &[("bare_link", Some("http://a.ru/x"), Some("a.ru"), None)]),
+    ("<ref>См. http://a.ru/x, http://b.ru/y!</ref>", &[
+        ("bare_link", Some("http://a.ru/x"), Some("a.ru"), None),
+        ("bare_link", Some("http://b.ru/y"), Some("b.ru"), None),
+    ]),
+    // A `)` stays when the URL has a `(`, as MediaWiki keeps it (both of them here), and goes when it has none.
+    ("<ref>(see http://a.ru/(x))</ref>", &[("bare_link", Some("http://a.ru/(x))"), Some("a.ru"), None)]),
+    ("<ref>(http://a.ru/x)</ref>", &[("bare_link", Some("http://a.ru/x"), Some("a.ru"), None)]),
+    ("<ref>http://a.ru/x)</ref>", &[("bare_link", Some("http://a.ru/x"), Some("a.ru"), None)]),
+    // Inside a citation template, an archive wrapper or an external link: no row of its own.
+    ("<ref>{{cite web|url=http://a.ru/x|title=T}}</ref>", &[("web", Some("http://a.ru/x"), Some("a.ru"), Some("T"))]),
+    ("<ref>{{webarchive|url=https://web.archive.org/web/2020/http://a.ru/x|date=2020}}</ref>", &[("web", Some("http://a.ru/x"), Some("a.ru"), None)]),
+    ("<ref>[http://b.ru/ Обзор, см. http://a.ru/x]</ref>", &[("bare_link", Some("http://b.ru/"), Some("b.ru"), Some("Обзор, см. http://a.ru/x"))]),
+    // No protocol-relative free URL, and no URL after a letter.
+    ("<ref>см. //a.ru/x</ref>", &[("plain_text", None, None, None)]),
+    ("<ref>xhttp://a.ru/x</ref>", &[("plain_text", None, None, None)]),
+    ("<ref>http://</ref>", &[("plain_text", None, None, None)]),
+    // Other protocols: mailto has no host.
+    ("<ref>mailto:x@a.ru</ref>", &[("bare_link", Some("mailto:x@a.ru"), None, None)]),
+    ("<ref>FTP://a.ru/f</ref>", &[("bare_link", Some("FTP://a.ru/f"), Some("a.ru"), None)]),
+    // A comment inside is skipped; `&lt;` cuts; an entity's `;` stays; quotes, templates and tags end the URL.
+    ("<ref>http://a.ru/<!-- c -->x y</ref>", &[("bare_link", Some("http://a.ru/x"), Some("a.ru"), None)]),
+    ("<ref>http://a.ru/x&lt;y</ref>", &[("bare_link", Some("http://a.ru/x"), Some("a.ru"), None)]),
+    ("<ref>http://a.ru/?a=1&amp;</ref>", &[("bare_link", Some("http://a.ru/?a=1&"), Some("a.ru"), None)]),
+    ("<ref>http://a.ru/x''курсив''</ref>", &[("bare_link", Some("http://a.ru/x"), Some("a.ru"), None)]),
+    ("<ref>http://a.ru/x{{недоступная ссылка}}</ref>", &[("bare_link", Some("http://a.ru/x"), Some("a.ru"), None)]),
+    ("<ref>http://a.ru/x<br>http://b.ru</ref>", &[
+        ("bare_link", Some("http://a.ru/x"), Some("a.ru"), None),
+        ("bare_link", Some("http://b.ru"), Some("b.ru"), None),
+    ]),
+    // In another template's parameter value, `|` ends it; a name is no text.
+    ("<ref>{{lang-en|http://a.ru/x|y}}</ref>", &[("bare_link", Some("http://a.ru/x"), Some("a.ru"), None)]),
+    // Raw text, a link, a file: no URL.
+    ("<ref><nowiki>http://a.ru/x</nowiki></ref>", &[("plain_text", None, None, None)]),
+    ("<ref>[[http://a.ru]] и [[Статья|http://a.ru/x]]</ref>", &[("plain_text", None, None, None)]),
+    // Outside refs, a free URL is no row.
+    ("Сайт: http://a.ru/x.", &[]),
+    // Short footnotes have no body.
+    ("{{sfn|http://a.ru|2000}}", &[]),
+];
+
 pub const DEFAULT_PRIVATE: &str = "../ruwiki_replication_package_sources/data/results/sources/test_corpus/parser_test_corpus_v1.parquet";
 
 pub fn public_corpus() -> Vec<CorpusRow> {

@@ -96,7 +96,7 @@ The labels in use:
 | test corpus (long) | `wiki_forkday=wikipedia:forkday`, `wiki_2025=wikipedia:2025-01-01`, `deleted_wiki_2025=wikipedia:2025-01-01`, `ruwiki_2025=ruwiki:2025-01-01` |
 | `crossection_diff` (pair) | `official_text=wikipedia:2025-01-01`, `clone_text=ruwiki:2025-01-01` |
 | `timeseries_diff` (pair) | `official_text=wikipedia:forkday`, and `clone_text=wikipedia:<date>`: both columns are Wikipedia |
-| `ruwiki_timeseries_diff` (pair) | each column with the site whose markup it holds, as above |
+| `ruwiki_timeseries_diff` (pair) | `official_text=ruwiki:forkday`, and `clone_text=ruwiki:<date>`: both columns are Ruwiki (the fetch reads both from Ruwiki's edit history) |
 
 A column name never says which site a text comes from, so the site is always given.
 
@@ -415,8 +415,9 @@ closing `</ref>`.
 - `template`: a footnote template (`{{sfn}}`, `{{sfnp}}`, `{{efn}}`, `{{комментарий}}`).
   - A short footnote (registry `family = "short"`, `{{sfn}}`): `body_raw` is the source of all its parameters,
     trimmed (after the name's `|`, before `}}`), and `body_text` their `value_text`s joined by one space in
-    source order, a named one as `name=value_text`. So `{{sfn|Иванов|1990|с=5}}` and `{{sfn|Иванов|2001|с=7}}`
-    differ.
+    source order, a named one as `name=value_text`, an empty positional value skipped (a named one with an empty
+    value stays as `name=`). So `{{sfn|Иванов|1990|с=5}}` and `{{sfn|Иванов|2001|с=7}}` differ, and
+    `{{sfn|Иванов||1990}}` has the `body_text` of `{{sfn|Иванов|1990}}`.
   - Any other footnote template: its parameter `1` (the last so named): `body_raw` is its `value_raw`,
     `body_text` its `value_text`.
   - `name` and `group` come from its `name=` and `group=` parameters (the last of each), with one pair of
@@ -469,7 +470,7 @@ One row per source as written in the markup (`walk/citations.rs`). Counting by s
 | `host` | string, null | the host of `url` |
 | `registrable_domain` | string, null | the registrable domain of `host` |
 | `dead_link` | bool | a `link_status` template (`{{недоступная ссылка}}`, `{{dead link}}`) sits in the same body |
-| `title` | string, null | the title; for a `bare_link`, the link's label (null without one) |
+| `title` | string, null | the title; for a `bare_link`, the link's label (null without one, and for a free URL) |
 | `authors` | list\<string\> | the authors, in source order |
 | `date_raw` | string, null | the date as written |
 | `year` | int32, null | the year (below) |
@@ -487,6 +488,23 @@ section and paragraph (a bibliography entry, a list item).
   footnote's ref.
 - Inside a ref, every external link that is not inside a citation template is one `bare_link` row (`url` from
   the link, `title` from its label). Outside refs, bare links are no rows.
+- So is every free URL that MediaWiki would link, in a ref's body and not inside a citation template, an archive
+  wrapper or an external link: `url` through the same URL analysis, so with `host` and `registrable_domain`, and
+  no `title`. The rules are MediaWiki's (`Parser::handleMagicLinks`, `Parser::makeFreeExternalLink`;
+  `autolink.rs`):
+  - it starts at a word boundary (the character before is no letter, digit or `_`) with one of the site's URL
+    protocols, in any case, but not the protocol-relative `//`; `mailto:` is one, and gives no host;
+  - it runs over URL characters: anything but `[`, `]`, `<`, `>`, `"`, spaces and other space separators, control
+    characters and U+FFFD. A comment inside is skipped and adds nothing to the URL. `''` and `{{` end it, and in
+    a template parameter's value so do `|` and `}}`;
+  - it ends before `&lt;`, `&gt;`, `&nbsp;` and their numeric forms, and leaves out trailing `,`, `;`, `.`, `:`,
+    `!` and `?`, and a trailing `)` when the URL has no `(` (`(см. http://a.ru/x)` gives `http://a.ru/x`); a `;`
+    that ends a character entity (`&amp;`) stays;
+  - with nothing after the protocol, there is no URL.
+
+  Text inside `<nowiki>`, `<pre>`, links, file links and tag attributes has no free URLs; a free URL in the
+  parameter of a template that is no citation template (`{{lang-en|http://a.ru}}`) counts, as a bracketed link
+  there does.
 - A ref with a body and no other row yields one `plain_text` row, at the ref's span with the ref as parent. So
   "refs without an identifiable source" is countable rather than missing.
 - An archive wrapper (`{{webarchive}}`, `{{wayback}}`, `{{архивировано}}`) merges into the nearest preceding row
@@ -507,8 +525,8 @@ section and paragraph (a bibliography entry, a list item).
   entry's `authors` list. A `lastN` comes with the `firstN` of its number as `"last, first"`; a `first` alone
   adds nothing.
 - `year` is the first run of exactly four digits between 1000 and 2100 in the `year` field, else in `date_raw`.
-- A row from a template has the template's span and parent; a `bare_link` row the link's span and parent; a
-  `plain_text` row the ref's span. All are placed where the walk met them. Ids follow the document order of
+- A row from a template has the template's span and parent; a `bare_link` row the link's span and parent (a free
+  URL's from its protocol to its last character, a comment inside included); a `plain_text` row the ref's span. All are placed where the walk met them. Ids follow the document order of
   their sources.
 
 ## The fallback path
@@ -573,8 +591,8 @@ Written at the end of a run (`driver::Manifest`).
 - A template whose title contains `:` cannot be given a registry entry (names with `:` are rejected), so its role
   is `other`; nor can a name with an HTML comment inside (`cite web<!-- -->`), which normalisation does not strip.
 - Footnote templates without `group=` take the registry's `default_group`, which comes from page-layout evidence
-  (R46: `{{efn}}` notes sit under `{{комментарии}}`, group `К`), not from the templates' expansion, which cannot
-  be checked offline.
+  (on the corpus pages, `{{efn}}` notes are listed under `{{комментарии}}`, so `{{efn}}` gets group `К`), not
+  from the templates' expansion, which cannot be checked offline.
 - CS1 `url-status=dead` and `deadlink=` do not set `dead_link`; only `link_status` templates do.
 - A bare `archive.is` (`archive.today`, `archive.ph`, `archive.li`) link gets no `archive_date_raw`, though its URL
   carries the date.
@@ -592,5 +610,10 @@ Written at the end of a run (`driver::Manifest`).
 - `--resume`: stale `.tmp` parts are never removed, a stale `manifest.json` stays after a watchdog abort, and a
   resumed manifest mixes scopes (`seconds_over_budget` and `pages_per_second` count this run, `status_counts`
   the whole output directory).
+- `--resume` with `--format json` reads each finished `.jsonl` whole into memory to count its statuses.
+- `quarantine.list` is matched on the raw line: a line edited by hand (the row written as `07`, trailing spaces,
+  a `\r`) no longer matches its page, which then runs again.
+- A short footnote whose parameters are all empty (`{{sfn||}}`) has a `body_raw`, so it counts as a definition in
+  its list's `n_entries`, although its `body_text` is empty.
 - Reading streams one row group at a time with no column projection, so memory is bounded per row group, not
   per batch.

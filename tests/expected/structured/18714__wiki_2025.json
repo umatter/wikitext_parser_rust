@@ -78,7 +78,7 @@
     "n_templates": 272,
     "n_refs": 54,
     "n_ref_lists": 1,
-    "n_citations": 61
+    "n_citations": 62
   },
   "sections": [
     {
@@ -18939,7 +18939,7 @@
       "n_uses": 1,
       "resolved": true,
       "harv_key": "CITEREFRossel1996",
-      "cites_citation_id": 56
+      "cites_citation_id": 57
     },
     {
       "id": 8,
@@ -19635,7 +19635,7 @@
       "n_uses": 1,
       "resolved": true,
       "harv_key": "CITEREFAndersen2005",
-      "cites_citation_id": 54
+      "cites_citation_id": 55
     },
     {
       "id": 37,
@@ -19659,7 +19659,7 @@
       "n_uses": 1,
       "resolved": true,
       "harv_key": "CITEREFAndersen2005",
-      "cites_citation_id": 54
+      "cites_citation_id": 55
     },
     {
       "id": 38,
@@ -19683,7 +19683,7 @@
       "n_uses": 1,
       "resolved": true,
       "harv_key": "CITEREFAndersen2005",
-      "cites_citation_id": 54
+      "cites_citation_id": 55
     },
     {
       "id": 39,
@@ -22189,28 +22189,28 @@
     },
     {
       "id": 23,
-      "start": 22703,
-      "end": 23140,
-      "start_char": 15406,
-      "end_char": 15843,
+      "start": 22861,
+      "end": 22927,
+      "start_char": 15564,
+      "end_char": 15630,
       "section_id": 3,
       "para_id": 17,
       "para_offset": 109,
-      "parent_type": "ref",
-      "parent_id": 25,
+      "parent_type": "template",
+      "parent_id": 38,
       "fallback": false,
-      "fp": "098551ab44cb0c10",
+      "fp": "cae29d1d2c2ef420",
       "context": "in_ref",
       "ref_id": 25,
-      "family": "plain_text",
+      "family": "bare_link",
       "template_id": null,
       "template_name": null,
       "params": [],
-      "url": null,
+      "url": "http://www.patriciagarfield.com/publications/anderson_2004IASD.pdf",
       "archive_url": null,
       "archive_date_raw": null,
-      "host": null,
-      "registrable_domain": null,
+      "host": "patriciagarfield.com",
+      "registrable_domain": "patriciagarfield.com",
       "dead_link": false,
       "title": null,
       "authors": [],
@@ -22227,6 +22227,44 @@
     },
     {
       "id": 24,
+      "start": 22958,
+      "end": 23067,
+      "start_char": 15661,
+      "end_char": 15770,
+      "section_id": 3,
+      "para_id": 17,
+      "para_offset": 109,
+      "parent_type": "template",
+      "parent_id": 38,
+      "fallback": false,
+      "fp": "cae29d1d2c2ef420",
+      "context": "in_ref",
+      "ref_id": 25,
+      "family": "bare_link",
+      "template_id": null,
+      "template_name": null,
+      "params": [],
+      "url": "http://www.patriciagarfield.com/publications/anderson_2004IASD.pdf",
+      "archive_url": "https://web.archive.org/web/20120321031708/http://www.patriciagarfield.com/publications/anderson_2004IASD.pdf",
+      "archive_date_raw": null,
+      "host": "patriciagarfield.com",
+      "registrable_domain": "patriciagarfield.com",
+      "dead_link": false,
+      "title": null,
+      "authors": [],
+      "date_raw": null,
+      "year": null,
+      "publisher": null,
+      "work": null,
+      "language": null,
+      "isbn": null,
+      "doi": null,
+      "access_date_raw": null,
+      "harv_key": null,
+      "text": null
+    },
+    {
+      "id": 25,
       "start": 23279,
       "end": 23502,
       "start_char": 15925,
@@ -22339,7 +22377,7 @@
       "text": null
     },
     {
-      "id": 25,
+      "id": 26,
       "start": 23560,
       "end": 23824,
       "start_char": 16185,
@@ -22426,7 +22464,7 @@
       "text": null
     },
     {
-      "id": 26,
+      "id": 27,
       "start": 24154,
       "end": 24719,
       "start_char": 16637,
@@ -22635,7 +22673,7 @@
       "text": null
     },
     {
-      "id": 27,
+      "id": 28,
       "start": 25348,
       "end": 25764,
       "start_char": 17578,
@@ -22756,7 +22794,7 @@
       "text": null
     },
     {
-      "id": 28,
+      "id": 29,
       "start": 26782,
       "end": 26957,
       "start_char": 18570,
@@ -22827,7 +22865,7 @@
       "text": null
     },
     {
-      "id": 29,
+      "id": 30,
       "start": 27417,
       "end": 27457,
       "start_char": 19017,
@@ -22890,7 +22928,7 @@
       "text": null
     },
     {
-      "id": 30,
+      "id": 31,
       "start": 27468,
       "end": 27834,
       "start_char": 19067,
@@ -22993,7 +23031,7 @@
       "text": null
     },
     {
-      "id": 31,
+      "id": 32,
       "start": 28397,
       "end": 28716,
       "start_char": 19751,
@@ -23096,7 +23134,7 @@
       "text": null
     },
     {
-      "id": 32,
+      "id": 33,
       "start": 29014,
       "end": 29056,
       "start_char": 20249,
@@ -23159,7 +23197,7 @@
       "text": null
     },
     {
-      "id": 33,
+      "id": 34,
       "start": 29248,
       "end": 29290,
       "start_char": 20412,
@@ -23222,7 +23260,7 @@
       "text": null
     },
     {
-      "id": 34,
+      "id": 35,
       "start": 29319,
       "end": 29356,
       "start_char": 20480,
@@ -23285,7 +23323,7 @@
       "text": null
     },
     {
-      "id": 35,
+      "id": 36,
       "start": 29547,
       "end": 29577,
       "start_char": 20639,
@@ -23348,7 +23386,7 @@
       "text": null
     },
     {
-      "id": 36,
+      "id": 37,
       "start": 29902,
       "end": 29939,
       "start_char": 20862,
@@ -23411,7 +23449,7 @@
       "text": null
     },
     {
-      "id": 37,
+      "id": 38,
       "start": 32011,
       "end": 32230,
       "start_char": 22042,
@@ -23517,7 +23555,7 @@
       "text": null
     },
     {
-      "id": 38,
+      "id": 39,
       "start": 32723,
       "end": 33072,
       "start_char": 22537,
@@ -23630,7 +23668,7 @@
       "text": null
     },
     {
-      "id": 39,
+      "id": 40,
       "start": 33521,
       "end": 33897,
       "start_char": 23141,
@@ -23743,7 +23781,7 @@
       "text": null
     },
     {
-      "id": 40,
+      "id": 41,
       "start": 35007,
       "end": 35337,
       "start_char": 24134,
@@ -23848,7 +23886,7 @@
       "text": null
     },
     {
-      "id": 41,
+      "id": 42,
       "start": 36088,
       "end": 36414,
       "start_char": 24887,
@@ -23943,7 +23981,7 @@
       "text": null
     },
     {
-      "id": 42,
+      "id": 43,
       "start": 36663,
       "end": 36923,
       "start_char": 25352,
@@ -24040,7 +24078,7 @@
       "text": null
     },
     {
-      "id": 43,
+      "id": 44,
       "start": 37404,
       "end": 37670,
       "start_char": 25917,
@@ -24153,7 +24191,7 @@
       "text": null
     },
     {
-      "id": 44,
+      "id": 45,
       "start": 38452,
       "end": 38702,
       "start_char": 26622,
@@ -24240,7 +24278,7 @@
       "text": null
     },
     {
-      "id": 45,
+      "id": 46,
       "start": 39033,
       "end": 39243,
       "start_char": 27053,
@@ -24327,7 +24365,7 @@
       "text": null
     },
     {
-      "id": 46,
+      "id": 47,
       "start": 46574,
       "end": 46682,
       "start_char": 32526,
@@ -24365,7 +24403,7 @@
       "text": "Калоши счастья"
     },
     {
-      "id": 47,
+      "id": 48,
       "start": 64771,
       "end": 65151,
       "start_char": 45252,
@@ -24460,7 +24498,7 @@
       "text": null
     },
     {
-      "id": 48,
+      "id": 49,
       "start": 65606,
       "end": 65755,
       "start_char": 45889,
@@ -24498,7 +24536,7 @@
       "text": null
     },
     {
-      "id": 49,
+      "id": 50,
       "start": 67028,
       "end": 67257,
       "start_char": 46788,
@@ -24593,7 +24631,7 @@
       "text": null
     },
     {
-      "id": 50,
+      "id": 51,
       "start": 67773,
       "end": 68049,
       "start_char": 47314,
@@ -24680,7 +24718,7 @@
       "text": null
     },
     {
-      "id": 51,
+      "id": 52,
       "start": 68695,
       "end": 69220,
       "start_char": 47966,
@@ -24783,7 +24821,7 @@
       "text": null
     },
     {
-      "id": 52,
+      "id": 53,
       "start": 71756,
       "end": 72073,
       "start_char": 50069,
@@ -24880,7 +24918,7 @@
       "text": null
     },
     {
-      "id": 53,
+      "id": 54,
       "start": 72076,
       "end": 72375,
       "start_char": 50315,
@@ -24977,7 +25015,7 @@
       "text": null
     },
     {
-      "id": 54,
+      "id": 55,
       "start": 73516,
       "end": 73781,
       "start_char": 51264,
@@ -25066,7 +25104,7 @@
       "text": null
     },
     {
-      "id": 55,
+      "id": 56,
       "start": 73784,
       "end": 74086,
       "start_char": 51492,
@@ -25163,7 +25201,7 @@
       "text": null
     },
     {
-      "id": 56,
+      "id": 57,
       "start": 74089,
       "end": 74295,
       "start_char": 51737,
@@ -25252,7 +25290,7 @@
       "text": null
     },
     {
-      "id": 57,
+      "id": 58,
       "start": 74298,
       "end": 74581,
       "start_char": 51909,
@@ -25349,7 +25387,7 @@
       "text": null
     },
     {
-      "id": 58,
+      "id": 59,
       "start": 74584,
       "end": 74883,
       "start_char": 52147,
@@ -25446,7 +25484,7 @@
       "text": null
     },
     {
-      "id": 59,
+      "id": 60,
       "start": 74886,
       "end": 75194,
       "start_char": 52403,
@@ -25551,7 +25589,7 @@
       "text": null
     },
     {
-      "id": 60,
+      "id": 61,
       "start": 75197,
       "end": 75481,
       "start_char": 52665,

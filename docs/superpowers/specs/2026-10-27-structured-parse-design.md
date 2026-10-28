@@ -367,7 +367,8 @@ Every file carries `wikitext_parser.schema_version` in its Parquet key-value met
     canonical fields mapped from Russian and English parameter names by the registry (`url`, `archive_url`,
     `archive_date_raw`, `title`, `authors` (list), `date_raw`, `year`, `publisher`, `work` (website,
     newspaper, journal or издание), `language`, `isbn`, `doi`, `access_date_raw`, `harv_key`);
-  - `bare_link`: a ref with an external link and no citation template (`url`, `title` from the label);
+  - `bare_link`: a ref with an external link and no citation template (`url`, `title` from the label), or
+    with a free URL that MediaWiki would link (no `title`; R73);
   - `plain_text`: a ref with neither (`text` only).
 
   Further rules:
@@ -463,41 +464,47 @@ commit `181dfb8` plus the Task 10 changes. Only aggregate figures from the perfo
 - **Batch stalls.** No page exceeded the budget, so no stall from a budget page was observed. The sum of
   per-page parse times is 6.6 s, or 0.55 s over 12 threads; with 256-row batches, waiting for each batch's
   slowest page raises that bound only to 0.56 s. The measured wall time is 4.8 s, so parse time is not what limits
-  the run; reading, converting and writing are. If a page ever ran to the budget (about 30 s), its batch would
-  wait for it.
+  the run; the serial part outside it is (the Release 1.0.0 note below finds it was the serial output
+  encoding). If a page ever ran to the budget (about 30 s), its batch would wait for it.
 
 #### Release 1.0.0 (2026-10-28)
 
-Measured with the full walk (all eight tables), release build at commit `8b4b801` plus the Task 21 changes, on
-the same performance sample (row group 0 of the 2025 cross-section: 14,568 pairs, 29,136 page versions, 148 MB),
-`parse_components --jobs 12`, default budget, labels `official_text=wikipedia:2025-01-01` and
-`clone_text=ruwiki:2025-01-01`, output outside the repository. The machine has 12 hardware threads. Only
-aggregates from the manifest and the `timings` table appear here. The sample is kept outside the repository; it
-was not deleted.
+Measured with the full walk (all eight tables), release build at commit `6fdcebe` plus the fix-round changes
+(free URLs in refs; the part writers in parallel), on the same performance sample (row group 0 of the 2025
+cross-section: 14,568 pairs, 29,136 page versions, 148 MB), `parse_components --jobs 12`, default budget, labels
+`official_text=wikipedia:2025-01-01` and `clone_text=ruwiki:2025-01-01`, output outside the repository. The
+machine has 12 hardware threads. Only aggregates from the manifest and the `timings` table appear here. The
+sample was deleted after the release measurements.
 
-- **Throughput.** 1,284, 1,287 and 1,290 pages per second over three runs (`pages_per_second`; wall time 22.7 to
-  22.8 s, 55 s of user time, peak resident memory 1.2 GB). Output: 227 MB for the sample, about 13.5 GB projected
-  for the whole cross-section.
+- **Throughput.** 1,932, 1,851 and 1,844 pages per second over three runs (`pages_per_second`; wall time 15.2 to
+  15.9 s, 58 to 59 s of user time, peak resident memory 1.2 GB). Before the fix the part writers ran one after
+  another and retraced their schema on every batch: 1,284 to 1,290 pages per second, 22.7 to 22.8 s. The three
+  runs wrote byte-identical part files (`timings` aside, which holds measured times), and so did the corpus at
+  `--jobs` 1, 3 and 12. Output: 227 MB for the sample, about 13.5 GB projected for the whole cross-section.
 - **Budget.** 0 of 29,136 versions over budget (0.000%), `seconds_over_budget` 0.0, no failed inputs. Status
   counts: `wikipedia`/`2025-01-01` 14,562 `ok` and 6 `redirect`; `ruwiki`/`2025-01-01` 14,568 `ok`. No
   `fallback`, `budget`, `depth_limit`, `panic` or `hang`. The largest parse took 684,448 steps.
-- **Per page** (ms, median / p90 / p99 / p99.9 / max), parse plus walk: Wikipedia 0.73 / 2.78 / 10.83 / 27.66 /
-  59.3; Ruwiki 0.67 / 2.56 / 9.05 / 23.10 / 41.2. The walk takes about four times the parse (7.4 s of parse and
-  30.4 s of walk summed over all versions).
-- **Projection** at the slowest run's 1,284 pages per second, counting two versions per input row (each family's
+- **Per page** (ms, median / p90 / p99 / p99.9 / max, first run), parse plus walk: Wikipedia 0.76 / 2.95 /
+  11.64 / 29.68 / 64.4; Ruwiki 0.68 / 2.65 / 9.96 / 24.30 / 41.3. The walk takes about four times the parse
+  (7.8 s of parse and 31.6 s of walk summed over all versions).
+- **Projection** at the slowest run's 1,844 pages per second, counting two versions per input row (each family's
   files have two text columns):
-  - cross-section, 866,484 pairs = 1,732,968 versions: about 22.5 min (0.37 h);
-  - Wikipedia time series, 1.4 M rows = 2.8 M versions: about 36 min (0.61 h); 18 min if the 1.4 M are
+  - cross-section, 866,484 pairs = 1,732,968 versions: about 16 min (0.26 h);
+  - Wikipedia time series, 1.4 M rows = 2.8 M versions: about 25 min (0.42 h); 13 min if the 1.4 M are
     versions, as the calibration note read them;
-  - Ruwiki time series, 1.1 M rows = 2.2 M versions: about 29 min (0.48 h); 14 min if versions.
+  - Ruwiki time series, 1.1 M rows = 2.2 M versions: about 20 min (0.33 h); 10 min if versions.
 
-  Every family is far below the 8-hour target (D9), by a factor of 13 or more. No page was over budget, so
+  Every family is far below the 8-hour target (D9), by a factor of 18 or more. No page was over budget, so
   the projection includes no budget pages; one at the full budget would cost its batch about 30 s.
-- **Where the time goes.** Parse and walk sum to 37.8 s of CPU time, 3.2 s over 12 threads, against 22.7 s of
-  wall time. As in the calibration note, the run is limited by the serial part (reading, converting, serialising
-  and writing), not by parsing. That is the place to speed it up, should it ever matter.
+- **Where the time goes.** Parse and walk sum to 39.5 s of CPU time, 3.3 s over 12 threads, against 15.2 s of
+  wall time, so parsing does not limit the run. Before the fix, the serial output encoding did: the eight part
+  writers encoded each batch one after another (tracing the row types, converting to Arrow, compressing with
+  zstd), about 14 of the 22.7 s by the comparison that follows. A run that writes only `pages` takes 8.7 s; the other seven tables
+  now add about 7 s, the encoding of the largest of them, which still alternates with parsing batch by batch.
+  The rest is reading the input and waiting at batch boundaries. Overlapping encoding with the next batch's
+  parse is the next place to speed it up, should it ever matter.
 - **Locality on the sample** (`locality_report_sample`, counts only). 14,568 pairs, 368 byte-identical.
-  Comparing each Wikipedia version with its Ruwiki version, 344,409 rows differ in `fp`; 345 of them lie
+  Comparing each Wikipedia version with its Ruwiki version, 344,458 rows differ in `fp`; 345 of them lie
   outside every changed line range (with its one-line widening) and are not exempted by the section rule. They
   fall in 21 pairs (5 with one, 7 with 2 to 9, 9 with 10 or more), none byte-identical. By table: paragraphs
   319, sections 10, templates 10, refs 3, citations 3. By class, read locally without recording any content:
