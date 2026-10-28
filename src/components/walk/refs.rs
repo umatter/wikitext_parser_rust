@@ -1,8 +1,9 @@
 //! The refs and ref_lists tables: one row per reference and per reference list, in document order.
 //!
-//! The walk (`walk/mod.rs`) tells this collector when it enters and leaves a `<ref>` or `<references>` tag and
-//! a footnote or ref-list template (by registry role), and hands it the text of each tag ref's body (a
-//! `Sink::Flat`, under the text rules of `text.rs`). Kinds, groups and resolution are settled in `finish`,
+//! The walk (`walk/mod.rs`) and the fallback scanner tell this collector, through `collect.rs`, when they enter
+//! and leave a `<ref>` or `<references>` tag (by its span) and a footnote or ref-list template (by registry
+//! role), and hand it the text of each tag ref's body (on the walk a `Sink::Flat`, under the text rules of
+//! `text.rs`). Kinds, groups and resolution are settled in `finish`,
 //! once the whole page is known.
 //!
 //! # Rows
@@ -424,9 +425,16 @@ pub(super) fn link_short(refs: &mut [RefRow], citations: &[CitationRow], is_shor
             targets.entry(k).or_insert(c.id);
         }
     }
+    // The first citation of family short in each ref's body, by id.
+    let mut first_short: HashMap<i32, &CitationRow> = HashMap::new();
+    for c in citations.iter().filter(|c| c.family == "short") {
+        if let Some(r) = c.ref_id {
+            first_short.entry(r).or_insert(c);
+        }
+    }
     for (r, &sfn) in refs.iter_mut().zip(is_short) {
         if !sfn {
-            match citations.iter().find(|c| c.ref_id == Some(r.id) && c.family == "short") {
+            match first_short.get(&r.id) {
                 Some(c) => r.harv_key = c.harv_key.clone(),
                 None => continue,
             }

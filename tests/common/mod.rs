@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+pub mod check;
+
 use std::path::{Path, PathBuf};
 use wikitext_components::corpus::{self, CorpusRow};
 use wikitext_components::settings::Settings;

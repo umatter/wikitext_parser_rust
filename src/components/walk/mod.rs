@@ -8,8 +8,12 @@
 //! - `Walker` is the visitor. Entering an element, it reads the context of the element around it (`Ctx`),
 //!   acts on the element (breaks a paragraph, opens a section, adds text), and pushes the context for the
 //!   element's children; leaving the element, it pops that context and closes what the element opened.
-//! - `text::TextBuilder` collects the paragraphs (the text rules are documented in `text.rs`),
-//!   `sections::Sections` the section tree.
+//! - `text::TextBuilder` collects the paragraphs (the text rules are documented in `text.rs`).
+//! - `collect::Collect` builds every other table from plain events (R52): headings, templates and their
+//!   parameters, `<ref>` and `<references>` tags, external links. The walker is the adapter from the parse
+//!   tree to those events; the fallback scanner (`fallback.rs`) emits the same events from a linear scan, so
+//!   the rules of the component tables (`sections.rs`, `templates.rs`, `refs.rs`, `citations.rs`) hold on
+//!   both paths.
 //!
 //! # Hook points for the component tables
 //!
@@ -33,6 +37,7 @@
 //! the ref innermost, so what it contains belongs to the ref; a ref-list template is a parent as a template.
 
 mod citations;
+mod collect;
 mod refs;
 mod sections;
 mod templates;
@@ -48,11 +53,9 @@ use crate::settings::Settings;
 use crate::spans::CharIndex;
 
 pub use citations::citeref;
-use citations::Citations;
-use refs::Refs;
-use sections::Sections;
-use templates::Templates;
-use text::{Flat, ParaKind, TextBuilder};
+pub(crate) use collect::{Collect, ParamEvent};
+pub(crate) use text::Flat;
+use text::{ParaKind, TextBuilder};
 use tree::{Element, Part, Visit};
 
 /// The limits of one walk: nodes visited, and the nesting depth of templates, tags and links.
@@ -116,14 +119,10 @@ pub fn walk(
     w.paras.break_paragraph(ParaKind::Prose);
     // Component rows collected during the walk get their `para_id` and `para_offset` here, now that every
     // paragraph is closed and before `finish` consumes the paragraph builder.
-    let Walker { paras, templates, refs, citations, sections, .. } = w;
-    let resolve = |place| resolve_place(&paras, place);
-    let templates = templates.finish(resolve);
-    let (mut refs, ref_lists, is_short) = refs.finish(resolve);
-    let sections = sections.finish(text, &chars, registry);
-    let citations = citations.finish(resolve, &sections);
-    refs::link_short(&mut refs, &citations, &is_short);
-    Ok(Components { templates, refs, ref_lists, citations, sections, paragraphs: paras.finish() })
+    let Walker { paras, collect, .. } = w;
+    let mut components = collect.finish(|place| resolve_place(&paras, place));
+    components.paragraphs = paras.finish();
+    Ok(components)
 }
 
 /// `para_id` and `para_offset` of a place, once every paragraph is closed.
@@ -199,7 +198,7 @@ enum Owner {
 }
 
 /// The nearest enclosing component: its table (`"template"`, `"ref"`, `"ref_list"`) and id.
-type Parent = Option<(&'static str, i32)>;
+pub(crate) type Parent = Option<(&'static str, i32)>;
 
 /// `parent_type` and `parent_id` of a row.
 fn parent_cols(parent: Parent) -> (Option<String>, Option<i32>) {
@@ -215,26 +214,73 @@ fn clamp_span(text: &str, start: usize, end: usize) -> (usize, usize) {
     (start, end.clamp(start, text.len()))
 }
 
+/// `start..end`, clamped into the text, without leading and trailing whitespace; empty at its start when it
+/// is all whitespace.
+pub(crate) fn trim_range(text: &str, start: usize, end: usize) -> (usize, usize) {
+    let end = end.min(text.len());
+    let start = start.min(end);
+    match text.get(start..end) {
+        Some(s) => {
+            let lead = s.len() - s.trim_start().len();
+            (start + lead, start + lead + s.trim().len())
+        }
+        None => (start, start),
+    }
+}
+
+/// The source span of a group of nodes, trimmed of whitespace; `(0, 0)` when it has none.
+fn trimmed_span(text: &str, nodes: &[Node]) -> (usize, usize) {
+    let (Some(first), Some(last)) = (nodes.first(), nodes.last()) else { return (0, 0) };
+    trim_range(text, first.start(), last.end())
+}
+
+/// The first colon in a template name's own text: in its text nodes, not inside a nested element.
+fn first_colon(name: &[Node]) -> Option<usize> {
+    name.iter().find_map(|n| match n {
+        Node::Text { value, start, .. } => value.find(':').map(|i| start + i),
+        _ => None,
+    })
+}
+
+/// The text of an external link's label: the nodes after the URL, as plain text.
+fn label_of(nodes: &[Node]) -> Option<String> {
+    fn add(n: &Node, out: &mut String) {
+        match n {
+            Node::Text { value, .. } => out.push_str(value),
+            Node::CharacterEntity { character, .. } => out.push(*character),
+            Node::Link { target, text, .. } if text.is_empty() => out.push_str(target),
+            Node::Link { text, .. } => text.iter().for_each(|n| add(n, out)),
+            _ => {}
+        }
+    }
+    let mut out = String::new();
+    let mut nodes = nodes.iter();
+    // The URL is the start of the first text node, up to its first whitespace.
+    if let Some(Node::Text { value, .. }) = nodes.next() {
+        out.push_str(value.find(char::is_whitespace).map_or("", |i| &value[i..]));
+    }
+    nodes.for_each(|n| add(n, &mut out));
+    let label = out.split_whitespace().collect::<Vec<_>>().join(" ");
+    (!label.is_empty()).then_some(label)
+}
+
 /// Where a component sits, as the walk meets it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Place {
-    section_id: i32,
+pub(crate) struct Place {
+    pub(crate) section_id: i32,
     /// The paragraph slot and the offset in its text.
-    para: Option<(usize, i32)>,
+    pub(crate) para: Option<(usize, i32)>,
 }
 
 struct Walker<'t, 's> {
     text: &'t str,
     settings: &'s Settings,
     paras: TextBuilder<'t>,
-    templates: Templates<'t, 's>,
-    refs: Refs<'t, 's>,
-    citations: Citations<'t, 's>,
-    /// The open components that are parents of what they contain, innermost last (see "Parents").
-    parents: Vec<(&'static str, i32)>,
-    sections: Sections,
-    /// The current section.
-    section: i32,
+    /// The builders of the component tables, fed with events.
+    collect: Collect<'t, 's>,
+    /// The text of the parameter value that just closed, until its `Param` closes (the value part is the
+    /// parameter's last child).
+    pending: String,
     /// Open `Sink::Flat` texts, innermost last.
     flats: Vec<Flat>,
     /// The section each open heading opened, innermost last.
@@ -271,12 +317,8 @@ impl<'t, 's> Walker<'t, 's> {
             text,
             settings,
             paras: TextBuilder::new(text, chars),
-            templates: Templates::new(text, chars, settings, registry),
-            refs: Refs::new(text, chars, registry, settings.site()),
-            citations: Citations::new(text, chars, registry, settings.site()),
-            parents: Vec::new(),
-            sections: Sections::new(),
-            section: 0,
+            collect: Collect::new(text, chars, settings, registry),
+            pending: String::new(),
             flats: Vec::new(),
             headings: Vec::new(),
             ctx: vec![root],
@@ -298,11 +340,7 @@ impl<'t, 's> Walker<'t, 's> {
             None if around.sink == Sink::Para => Some((self.paras.slot(), self.paras.anchor())),
             None => None,
         };
-        Place { section_id: self.section, para }
-    }
-
-    fn parent(&self) -> Parent {
-        self.parents.last().copied()
+        Place { section_id: self.collect.section(), para }
     }
 
     fn add_text(&mut self, sink: Sink, s: &str, start: usize) {
@@ -451,9 +489,9 @@ impl<'t, 's> Walker<'t, 's> {
                 }
                 let level = *level as usize;
                 let raw = self.text.get(start + level..end.saturating_sub(level)).unwrap_or("").trim();
-                self.section = self.sections.open(level as u8, start, end, raw);
-                self.paras.set_section(self.section);
-                self.headings.push(self.section);
+                let id = self.collect.heading(level as u8, (start, end), raw);
+                self.paras.set_section(id);
+                self.headings.push(id);
                 self.flats.push(Flat::default());
                 c.sink = Sink::Flat(self.flats.len() - 1);
             }
@@ -472,7 +510,7 @@ impl<'t, 's> Walker<'t, 's> {
             Node::ExternalLink { nodes, .. } => {
                 self.touch(around, start, end);
                 c.url = true;
-                self.citations.enter_link(nodes, (start, end), self.place(), self.parent());
+                self.collect.external_link((start, end), label_of(nodes), self.place());
             }
             Node::Tag { name, .. } => {
                 let place = self.place();
@@ -482,34 +520,17 @@ impl<'t, 's> Walker<'t, 's> {
                 }
                 match name.as_ref() {
                     "ref" => {
-                        let id = self.refs.enter_tag(start, end, place, self.parent());
-                        self.citations.enter_tag_ref(id, (start, end), place);
-                        self.parents.push(("ref", id));
+                        self.collect.ref_open((start, end), place);
                         self.flats.push(Flat::default());
                         c.sink = Sink::Flat(self.flats.len() - 1);
                     }
-                    "references" => {
-                        let id = self.refs.enter_list_tag(start, end, place, self.parent());
-                        self.parents.push(("ref_list", id));
-                    }
+                    "references" => self.collect.ref_list_open((start, end), place),
                     _ => {}
                 }
             }
             Node::Template { name, .. } => {
-                let (place, parent) = (self.place(), self.parent());
-                let id = self.templates.enter(name, (start, end), place, parent);
-                self.parents.push(("template", id as i32));
-                let row = self.templates.row(id);
-                match row.role.as_str() {
-                    "footnote" => {
-                        let r = self.refs.enter_template(row, place, parent);
-                        self.citations.enter_footnote(row, r, place);
-                        self.parents.push(("ref", r));
-                    }
-                    "ref_list" => self.refs.enter_list_template(row, place, parent),
-                    _ => {}
-                }
-                self.citations.enter_template(row, place, parent);
+                let place = self.place();
+                self.collect.template_open(trimmed_span(self.text, name), first_colon(name), (start, end), place);
                 self.touch(around, start, end);
                 self.exclude(around, c);
                 c.owner = Owner::Template;
@@ -550,42 +571,18 @@ impl<'t, 's> Walker<'t, 's> {
                 debug_assert_eq!(c.sink, Sink::Flat(self.flats.len() - 1));
                 let title = self.flats.pop().expect("pushed on enter").into_text();
                 let id = self.headings.pop().expect("pushed on enter");
-                self.sections.set_title(id, title);
+                self.collect.heading_title(id, title);
             }
             Node::Tag { name, .. } => match name.as_ref() {
                 "ref" => {
                     debug_assert_eq!(c.sink, Sink::Flat(self.flats.len() - 1));
                     let body = self.flats.pop().expect("pushed on enter").into_text();
-                    self.refs.close_tag(body);
-                    if let Some(("ref", id)) = self.parents.last() {
-                        self.citations.close_ref(self.refs.row(*id as usize));
-                    }
-                    self.parents.pop();
+                    self.collect.ref_close(body);
                 }
-                "references" => {
-                    self.refs.close_list(None);
-                    self.parents.pop();
-                }
+                "references" => self.collect.ref_list_close(),
                 _ => {}
             },
-            Node::Template { .. } => {
-                if let Some(id) = self.templates.close() {
-                    let row = self.templates.row(id);
-                    match row.role.as_str() {
-                        "footnote" => {
-                            self.refs.close_template(row);
-                            if let Some(("ref", id)) = self.parents.last() {
-                                self.citations.close_ref(self.refs.row(*id as usize));
-                            }
-                            self.parents.pop();
-                        }
-                        "ref_list" => self.refs.close_list(Some(row)),
-                        _ => {}
-                    }
-                    self.citations.close_template(self.templates.row(id));
-                }
-                self.parents.pop();
-            }
+            Node::Template { .. } => self.collect.template_close(),
             Node::Link { .. } => self.after_link = Some(node.end()),
             Node::Preformatted { .. } => {
                 if c.sink == Sink::Para {
@@ -629,10 +626,10 @@ impl<'n, 'a> Visit<'n, 'a> for Walker<'_, '_> {
                 self.touch(around, span.0, span.1);
             }
             // The name part of a module or parser function holds parameter 1, after its colon.
-            Element::Part(Part::Name, _) if around.owner == Owner::Template && self.templates.split_from().is_some() => {
+            Element::Part(Part::Name, _) if around.owner == Owner::Template && self.collect.split_from().is_some() => {
                 self.flats.push(Flat::default());
                 c.sink = Sink::Flat(self.flats.len() - 1);
-                c.from = self.templates.split_from().unwrap_or(0);
+                c.from = self.collect.split_from().unwrap_or(0);
             }
             // Names and attributes never add text.
             Element::Part(Part::Name | Part::Attributes, _) => c.sink = Sink::Mute,
@@ -663,13 +660,17 @@ impl<'n, 'a> Visit<'n, 'a> for Walker<'_, '_> {
             }
             Element::Part(Part::Name, _) if around.owner == Owner::Template && matches!(c.sink, Sink::Flat(_)) => {
                 let text = self.flats.pop().expect("pushed on enter").into_text();
-                self.templates.set_split_text(text);
+                self.collect.template_split_text(text);
             }
             Element::Part(Part::Value, _) if around.owner == Owner::Param => {
-                let text = self.flats.pop().expect("pushed on enter").into_text();
-                self.templates.set_pending(text);
+                self.pending = self.flats.pop().expect("pushed on enter").into_text();
             }
-            Element::Param(p) => self.templates.close_param(p),
+            Element::Param(p) => self.collect.template_param(ParamEvent {
+                name: p.name.as_deref().map(|n| trimmed_span(self.text, n)),
+                value: trimmed_span(self.text, &p.value),
+                span: (p.start, p.end),
+                value_text: std::mem::take(&mut self.pending),
+            }),
             Element::Part(..) | Element::Caption(_) | Element::Row(_) | Element::Cell(_) => {}
         }
     }

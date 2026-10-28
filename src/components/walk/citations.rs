@@ -1,7 +1,7 @@
 //! The citations table: one row per source a page cites, in document order.
 //!
-//! The walk (`walk/mod.rs`) tells this collector when it enters and leaves a ref, a template and an external
-//! link. A template's parameters are known when it closes, so a row is reserved (a slot) when its source is
+//! The walk (`walk/mod.rs`) and the fallback scanner tell this collector, through `collect.rs`, when they enter
+//! and leave a ref, a template and an external link (with the text of its label). A template's parameters are known when it closes, so a row is reserved (a slot) when its source is
 //! entered and filled when it is known; ids are the filled slots in order, dense from 0 in `finish`.
 //!
 //! # Bodies
@@ -62,8 +62,6 @@ use std::collections::HashSet;
 use std::sync::LazyLock;
 
 use regex::Regex;
-
-use parse_wiki_text_2::Node;
 
 use crate::fingerprint::{fp, norm};
 use crate::model::{CitationRow, ParamRow, RefRow, SectionRow, TemplateRow};
@@ -260,28 +258,6 @@ fn authors(t: &TemplateRow, e: &TemplateEntry) -> Vec<String> {
     out
 }
 
-/// The text of an external link's label: the nodes after the URL, as plain text.
-fn label_of(nodes: &[Node]) -> Option<String> {
-    fn add(n: &Node, out: &mut String) {
-        match n {
-            Node::Text { value, .. } => out.push_str(value),
-            Node::CharacterEntity { character, .. } => out.push(*character),
-            Node::Link { target, text, .. } if text.is_empty() => out.push_str(target),
-            Node::Link { text, .. } => text.iter().for_each(|n| add(n, out)),
-            _ => {}
-        }
-    }
-    let mut out = String::new();
-    let mut nodes = nodes.iter();
-    // The URL is the start of the first text node, up to its first whitespace.
-    if let Some(Node::Text { value, .. }) = nodes.next() {
-        out.push_str(value.find(char::is_whitespace).map_or("", |i| &value[i..]));
-    }
-    nodes.for_each(|n| add(n, &mut out));
-    let label = out.split_whitespace().collect::<Vec<_>>().join(" ");
-    (!label.is_empty()).then_some(label)
-}
-
 impl<'t, 's> Citations<'t, 's> {
     pub(super) fn new(text: &'t str, chars: &'t CharIndex, registry: &'s Registry, site: &'s str) -> Self {
         Citations {
@@ -411,8 +387,8 @@ impl<'t, 's> Citations<'t, 's> {
         self.close_body(&body);
     }
 
-    /// An external link is entered.
-    pub(super) fn enter_link(&mut self, nodes: &[Node], span: (usize, usize), place: Place, parent: Parent) {
+    /// An external link is entered; `label` is the text of its label (the `title` of a `bare_link` row).
+    pub(super) fn enter_link(&mut self, label: Option<String>, span: (usize, usize), place: Place, parent: Parent) {
         let Some(body) = self.bodies.last() else { return };
         let (Some(info), false, 0) = (&body.refinfo, body.skip, body.cite_depth) else { return };
         let ref_id = info.id;
@@ -423,7 +399,7 @@ impl<'t, 's> Citations<'t, 's> {
         let Some(slot) = self.reserve(place) else { return };
         let mut row = self.blank((start, end), parent, "bare_link", Some(ref_id));
         set_url(&mut row, url_raw);
-        row.title = label_of(nodes);
+        row.title = label;
         self.slots[slot] = Some(row);
     }
 

@@ -1,7 +1,8 @@
 //! The templates table: one row per template, in document order, with its parameters and its nesting.
 //!
-//! The walk (`walk/mod.rs`) tells this collector when it enters and leaves a template and a parameter and
-//! hands it the text of each parameter value (a `Sink::Flat`, under the text rules of `text.rs`).
+//! The walk (`walk/mod.rs`) and the fallback scanner tell this collector, through `collect.rs`, when they enter
+//! and leave a template and a parameter, and hand it the spans of the name and of each parameter and the text
+//! of each value (on the walk a `Sink::Flat`, under the text rules of `text.rs`).
 //!
 //! # Rules
 //!
@@ -21,15 +22,14 @@
 //!   around it.
 //! - `fp` is over the name and the `name=norm(value_text)` pairs, sorted by name (stable).
 
-use parse_wiki_text_2::{Node, Parameter, Positioned};
-
 use crate::fingerprint::{fp, norm};
 use crate::model::{ParamRow, TemplateRow};
 use crate::registry::Registry;
 use crate::settings::Settings;
 use crate::spans::CharIndex;
 
-use super::{clamp_span, parent_cols, Parent, Place};
+use super::collect::ParamEvent;
+use super::{clamp_span, parent_cols, trim_range, Parent, Place};
 
 struct Open {
     row: usize,
@@ -37,8 +37,6 @@ struct Open {
     next_pos: u32,
     /// Byte after the colon of a module or parser function, whose text is parameter `1`.
     split_from: Option<usize>,
-    /// The text of the parameter value that just closed, until its `Param` closes.
-    pending: String,
 }
 
 pub(super) struct Templates<'t, 's> {
@@ -49,24 +47,6 @@ pub(super) struct Templates<'t, 's> {
     rows: Vec<TemplateRow>,
     places: Vec<Place>,
     open: Vec<Open>,
-}
-
-/// The source span of a group of nodes, trimmed of whitespace; empty at the group's start when it has none.
-fn trimmed_span(text: &str, nodes: &[Node]) -> (usize, usize) {
-    let (Some(first), Some(last)) = (nodes.first(), nodes.last()) else { return (0, 0) };
-    trim_range(text, first.start(), last.end())
-}
-
-fn trim_range(text: &str, start: usize, end: usize) -> (usize, usize) {
-    let end = end.min(text.len());
-    let start = start.min(end);
-    match text.get(start..end) {
-        Some(s) => {
-            let lead = s.len() - s.trim_start().len();
-            (start + lead, start + lead + s.trim().len())
-        }
-        None => (start, start),
-    }
 }
 
 impl<'t, 's> Templates<'t, 's> {
@@ -84,23 +64,18 @@ impl<'t, 's> Templates<'t, 's> {
         self.open.last().and_then(|o| o.split_from)
     }
 
-    /// A template node with these name nodes and span is entered at `place`, inside `parent`. Returns the
-    /// row's id.
+    /// A template with this trimmed name span and span is entered at `place`, inside `parent`; `colon` is the
+    /// first colon in the name's own text (not inside a nested element). Returns the row's id.
     pub(super) fn enter(
         &mut self,
-        name_nodes: &[Node],
+        (name_start, name_end): (usize, usize),
+        colon: Option<usize>,
         (start, end): (usize, usize),
         place: Place,
         parent: Parent,
     ) -> usize {
         let (start, end) = clamp_span(self.text, start, end);
-        let (name_start, name_end) = trimmed_span(self.text, name_nodes);
         let name_raw = self.text.get(name_start..name_end).unwrap_or("");
-        // The first colon in the name's own text.
-        let colon = name_nodes.iter().find_map(|n| match n {
-            Node::Text { value, start, .. } => value.find(':').map(|i| start + i),
-            _ => None,
-        });
         let head = colon.and_then(|c| self.text.get(name_start..c)).map(str::trim);
         let whole = self.settings.template_name(name_raw);
         // An explicit template-namespace prefix transcludes the page: never a function or a variable.
@@ -169,7 +144,6 @@ impl<'t, 's> Templates<'t, 's> {
             row: id,
             next_pos: if split.is_some() { 2 } else { 1 },
             split_from: split.map(|c| c + 1),
-            pending: String::new(),
         });
         id
     }
@@ -190,35 +164,24 @@ impl<'t, 's> Templates<'t, 's> {
         }
     }
 
-    /// The value of a parameter closes with its text. Its `Param` closes right after (the value part is
-    /// the last child), and `close_param` takes the text then.
-    pub(super) fn set_pending(&mut self, text: String) {
-        if let Some(o) = self.open.last_mut() {
-            o.pending = text;
-        }
-    }
-
     /// A parameter of the open template closes.
-    pub(super) fn close_param(&mut self, p: &Parameter) {
+    pub(super) fn close_param(&mut self, p: ParamEvent) {
         let Some(o) = self.open.last_mut() else { return };
-        let (name, positional) = match &p.name {
-            Some(nodes) => {
-                let (a, b) = trimmed_span(self.text, nodes);
-                (self.text.get(a..b).unwrap_or("").to_string(), false)
-            }
+        let (name, positional) = match p.name {
+            Some((a, b)) => (self.text.get(a..b).unwrap_or("").to_string(), false),
             None => {
                 let n = o.next_pos;
                 o.next_pos += 1;
                 (n.to_string(), true)
             }
         };
-        let (a, b) = trimmed_span(self.text, &p.value);
-        let (start, end) = clamp_span(self.text, p.start, p.end);
+        let (a, b) = p.value;
+        let (start, end) = clamp_span(self.text, p.span.0, p.span.1);
         let row = ParamRow {
             name,
             positional,
             value_raw: self.text.get(a..b).unwrap_or("").to_string(),
-            value_text: std::mem::take(&mut o.pending),
+            value_text: p.value_text,
             start: start as i32,
             end: end as i32,
         };
