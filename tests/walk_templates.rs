@@ -137,10 +137,13 @@ fn namespace_prefix_makes_a_template() {
     let t = templates("{{Шаблон:PAGENAME}}");
     assert_eq!(t[0].kind, "template");
     let t = templates("{{DEFAULTSORT:X}}");
-    assert_eq!((t[0].name.as_str(), t[0].kind.as_str()), ("dEFAULTSORT", "parser_function"));
+    assert_eq!((t[0].name.as_str(), t[0].kind.as_str()), ("defaultsort", "parser_function"));
     assert_eq!(params(&t[0].params), vec![("1", true, "X")]);
+    for (text, name) in [("{{#IF:x|a}}", "#if"), ("{{LC:ABC}}", "lc"), ("{{#Invoke:M|f}}", "#invoke"), ("{{PAGENAME}}", "pagename")] {
+        assert_eq!(templates(text)[0].name, name, "{text}");
+    }
     let t = templates("{{PAGENAME:x}}");
-    assert_eq!((t[0].name.as_str(), t[0].kind.as_str()), ("pAGENAME", "parser_function"));
+    assert_eq!((t[0].name.as_str(), t[0].kind.as_str()), ("pagename", "parser_function"));
 }
 
 #[test]
@@ -198,4 +201,9 @@ fn spans_round_trip_on_the_corpus() {
     }
     eprintln!("public corpus: {n_templates} templates, {n_params} parameters");
     assert!(n_templates > 1000, "{n_templates}");
+}
+
+#[test]
+fn magic_word_fingerprint_uses_the_lowercased_name() {
+    assert_eq!(templates("{{LC:ABC}}")[0].fp, fp("lc\u{1f}1=abc"));
 }

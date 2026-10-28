@@ -110,9 +110,11 @@ impl<'t, 's> Templates<'t, 's> {
             "template"
         };
         let split = matches!(kind, "module" | "parser_function").then_some(colon).flatten();
-        let name = match (split, head) {
-            (Some(_), Some(h)) => self.settings.template_name(h),
-            _ => whole,
+        // Magic words are not page names: fully lowercased. The first-letter rule is for templates only.
+        let name = match (kind, split, head) {
+            ("template", ..) => whole,
+            (_, Some(_), Some(h)) => norm(h),
+            _ => norm(name_raw),
         };
         let role = self
             .registry
