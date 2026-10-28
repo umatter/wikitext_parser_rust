@@ -12,7 +12,7 @@
 //!   body, then the text of its body.
 //! - **`<references>` tag** (`ref_list_open`, `ref_list_close`): its span.
 //! - **External link** (`external_link`): its span, from which `citations.rs` reads the URL, and the text of
-//!   its label.
+//!   its label, asked for only when a `bare_link` row keeps it.
 //!
 //! Every event carries the `Place` the caller met it at. Texts follow the text rules of `text.rs` on the walk
 //! and the strip of `fallback.rs` (R53) on the fallback path.
@@ -181,8 +181,9 @@ impl<'t, 's> Collect<'t, 's> {
         self.parents.pop();
     }
 
-    /// An external link spanning `span`, with the text of its label, is entered.
-    pub(crate) fn external_link(&mut self, span: (usize, usize), label: Option<String>, place: Place) {
+    /// An external link spanning `span` is entered; `label` gives the text of its label, asked for only when a
+    /// row keeps it.
+    pub(crate) fn external_link(&mut self, span: (usize, usize), label: impl FnOnce() -> Option<String>, place: Place) {
         self.citations.enter_link(label, span, place, self.parent());
     }
 

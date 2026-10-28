@@ -518,7 +518,7 @@ impl<'t, 's> Walker<'t, 's> {
             Node::ExternalLink { nodes, .. } => {
                 self.touch(around, start, end);
                 c.url = true;
-                self.collect.external_link((start, end), label_of(nodes), self.place());
+                self.collect.external_link((start, end), || label_of(nodes), self.place());
             }
             Node::Tag { name, .. } => {
                 let place = self.place();

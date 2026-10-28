@@ -74,9 +74,11 @@ pub fn check_page(pg: &Page, c: &Components, reg: &Registry, site: &str, n: &mut
             ck(whole.is_some(), "param span on char boundaries", &|| format!("{}..{}", p.start, p.end));
             let whole = whole.unwrap_or("");
             ck(t.start <= p.start && p.end <= t.end, "param span inside the template", &|| format!("{}..{}", p.start, p.end));
-            // The colon parameter of a module or parser function: exactly its trimmed text. Any
-            // other parameter's span holds its value.
-            let colon_param = i0 == 0 && matches!(t.kind.as_str(), "module" | "parser_function") && t.name_raw.contains(':');
+            // The colon parameter of a module or parser function (the one whose source comes right after
+            // the name's colon): exactly its trimmed text. Any other parameter's span holds its value.
+            let before = text.get(..p.start as usize).unwrap_or("").trim_end();
+            let colon_param =
+                i0 == 0 && matches!(t.kind.as_str(), "module" | "parser_function") && before.ends_with(':');
             let holds = if colon_param { whole == p.value_raw } else { whole.contains(&p.value_raw) };
             ck(holds, "param span holds value_raw", &|| format!("{whole:?} {:?}", p.value_raw));
             ck(p.value_raw == p.value_raw.trim(), "param value_raw trimmed", &|| format!("{:?}", p.value_raw));

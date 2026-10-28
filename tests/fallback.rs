@@ -152,6 +152,13 @@ fn linear_time_on_other_adversarial_inputs() {
         "</ref>{{a|b=".repeat(100_000),
         "== a {{b ==\n".repeat(100_000),
         "{{a|".repeat(300) + &"}}".repeat(300) + &"<ref>x</ref>".repeat(100_000),
+        // A region's closing tag searched for again each time an element that would cut it is dropped: the
+        // quadratic search took 41 s and 35 s on these (1.8 MB and 1.6 MB).
+        "{{a|<ref><nowiki>}}{{a|<references><nowiki>}}".repeat(40_000) + "</references></ref>",
+        "{{a|<ref><pre>}}{{a|<references><pre>}}".repeat(40_000) + "</references></ref>",
+        // Nested external links in a ref, each label holding the inner ones: quadratic in time and memory
+        // (2.7 s at 1.5 MB).
+        "<ref>".to_string() + &"[http://a.ru x ".repeat(399) + &"y".repeat(2_000_000) + &"]".repeat(399) + "</ref>",
     ];
     for t in &cases {
         let s = std::time::Instant::now();
@@ -358,31 +365,73 @@ fn corpus_invariants_hold_on_fallback_rows() {
     assert!(templates > 1000 && refs > 1000 && lists > 100 && citations > 1000, "{public_n:?}");
 }
 
-/// R53's metric, reported and not asserted: of the ref and citation rows of the public corpus, matched between
-/// the parsed path and the fallback by table and order, the share whose `fp` agrees.
+/// R53's metric, reported and not asserted: of the rows of the five tables, matched between the parsed path and
+/// the fallback by table and order, the share whose `fp` agrees. The public corpus, and the private corpus when
+/// present, as counts only.
 #[test]
 fn fp_agreement_with_the_parsed_path() {
-    let (settings, reg) = (ru(), reg());
-    let (mut refs, mut cites) = ([0usize; 3], [0usize; 3]); // [agree, matched by order, total of the larger side]
-    let count = |n: &mut [usize; 3], a: Vec<&str>, b: Vec<&str>| {
-        n[0] += a.iter().zip(&b).filter(|(x, y)| x == y).count();
-        n[1] += a.len().min(b.len());
-        n[2] += a.len().max(b.len());
-    };
-    for r in common::public_corpus() {
-        let a = run_page(&r.wikitext, "wikipedia").components;
-        let b = fallback::scan(&r.wikitext, &settings, &reg);
-        count(&mut refs, a.refs.iter().map(|x| x.fp.as_str()).collect(), b.refs.iter().map(|x| x.fp.as_str()).collect());
-        count(
-            &mut cites,
-            a.citations.iter().map(|x| x.fp.as_str()).collect(),
-            b.citations.iter().map(|x| x.fp.as_str()).collect(),
-        );
+    const TABLES: [&str; 5] = ["templates", "refs", "ref_lists", "citations", "sections"];
+    fn fps(c: &Components) -> [Vec<&str>; 5] {
+        [
+            c.templates.iter().map(|x| x.fp.as_str()).collect(),
+            c.refs.iter().map(|x| x.fp.as_str()).collect(),
+            c.ref_lists.iter().map(|x| x.fp.as_str()).collect(),
+            c.citations.iter().map(|x| x.fp.as_str()).collect(),
+            c.sections.iter().map(|x| x.fp.as_str()).collect(),
+        ]
     }
-    let pct = |n: &[usize; 3]| 100.0 * n[0] as f64 / n[2].max(1) as f64;
-    eprintln!(
-        "fp agreement, public corpus: refs {}/{} ({:.2}%, {} matched by order), citations {}/{} ({:.2}%, {} matched by order)",
-        refs[0], refs[2], pct(&refs), refs[1], cites[0], cites[2], pct(&cites), cites[1]
-    );
-    assert!(refs[2] > 1000 && cites[2] > 1000);
+    // Per table: [agree, matched by order, total of the larger side].
+    let agreement = |rows: Vec<String>, site: &str| {
+        let (settings, reg) = (common::settings_for(site), reg());
+        let mut n = [[0usize; 3]; 5];
+        for text in rows {
+            let a = run_page(&text, site).components;
+            let b = fallback::scan(&text, &settings, &reg);
+            for (n, (a, b)) in n.iter_mut().zip(fps(&a).iter().zip(fps(&b).iter())) {
+                n[0] += a.iter().zip(b).filter(|(x, y)| x == y).count();
+                n[1] += a.len().min(b.len());
+                n[2] += a.len().max(b.len());
+            }
+        }
+        n
+    };
+    let report = |corpus: &str, n: &[[usize; 3]; 5]| {
+        let parts: Vec<String> = TABLES
+            .iter()
+            .zip(n)
+            .map(|(t, n)| format!("{t} {}/{} ({:.2}%, {} matched by order)", n[0], n[2], 100.0 * n[0] as f64 / n[2].max(1) as f64, n[1]))
+            .collect();
+        eprintln!("fp agreement, {corpus}: {}", parts.join(", "));
+    };
+    let public = agreement(common::public_corpus().into_iter().map(|r| r.wikitext).collect(), "wikipedia");
+    report("public corpus", &public);
+    assert!(public.iter().all(|n| n[2] > 100), "{public:?}");
+    if let Some(rows) = common::private_corpus("fp_agreement_with_the_parsed_path (private part)") {
+        report("private corpus", &agreement(rows.into_iter().map(|r| r.wikitext).collect(), "ruwiki"));
+    }
+}
+
+/// In an external link's label, a nested external link adds nothing, as the walk reads a label.
+#[test]
+fn ext_link_labels_skip_nested_links_as_the_walker_does() {
+    let t = "<ref>[http://a.ru x [http://b.ru y] z]</ref>";
+    let titles = |c: &Components| c.citations.iter().map(|c| c.title.clone()).collect::<Vec<_>>();
+    let want = vec![Some("x z".to_string()), Some("y".to_string())];
+    assert_eq!(titles(&run_page(t, "wikipedia").components), want);
+    assert_eq!(titles(&scan(t)), want);
+}
+
+/// Past the depth cap, a tag opens no element but pairs with its own closing tag (R56), so it never closes an
+/// element it did not open.
+#[test]
+fn tags_past_the_depth_cap_pair_with_their_own_close() {
+    let n = DEFAULT_DEPTH_CAP + 10;
+    let t = "<ref>".to_string() + &"{{a|".repeat(n) + "<ref>inner</ref><references>x</references>" + &"}}".repeat(n) + "outer</ref>";
+    let c = scan(&t);
+    // The ref is the first open element, so templates fill the cap less one.
+    assert_eq!(c.templates.len(), DEFAULT_DEPTH_CAP - 1);
+    let r: Vec<_> = c.refs.iter().map(|r| (r.start as usize, r.end as usize)).collect();
+    assert_eq!(r, vec![(0, t.len())]);
+    assert!(c.ref_lists.is_empty());
+    assert!(c.refs[0].body_raw.ends_with("outer"));
 }

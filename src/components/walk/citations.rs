@@ -387,8 +387,15 @@ impl<'t, 's> Citations<'t, 's> {
         self.close_body(&body);
     }
 
-    /// An external link is entered; `label` is the text of its label (the `title` of a `bare_link` row).
-    pub(super) fn enter_link(&mut self, label: Option<String>, span: (usize, usize), place: Place, parent: Parent) {
+    /// An external link is entered; `label` gives the text of its label (the `title` of a `bare_link` row),
+    /// asked for only when the row is made.
+    pub(super) fn enter_link(
+        &mut self,
+        label: impl FnOnce() -> Option<String>,
+        span: (usize, usize),
+        place: Place,
+        parent: Parent,
+    ) {
         let Some(body) = self.bodies.last() else { return };
         let (Some(info), false, 0) = (&body.refinfo, body.skip, body.cite_depth) else { return };
         let ref_id = info.id;
@@ -399,7 +406,7 @@ impl<'t, 's> Citations<'t, 's> {
         let Some(slot) = self.reserve(place) else { return };
         let mut row = self.blank((start, end), parent, "bare_link", Some(ref_id));
         set_url(&mut row, url_raw);
-        row.title = label;
+        row.title = label();
         self.slots[slot] = Some(row);
     }
 

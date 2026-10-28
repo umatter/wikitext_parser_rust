@@ -44,13 +44,17 @@
 //! - **Malformed input.** A closer finds its opener under unclosed elements, which are dropped. An element
 //!   that never closes (an unclosed `{{`, `<ref>`, `[[`) is no component: its text stays, what it contained is
 //!   its parent's (components, heading lines and separators alike, as the parser's rescan would find them).
-//! - **Depth.** Past `DEFAULT_DEPTH_CAP` open elements no element opens; `{{` and `}}` are still counted, so
-//!   the closes of the outer templates are found, and a closing tag of an open element still closes it.
+//! - **Depth (R54, R56).** Past `DEFAULT_DEPTH_CAP` open elements no element opens and no component is made,
+//!   but counting goes on (`Ghost`): `{{` pairs with `}}` and a paired extension tag (`<ref>`, `<references>`,
+//!   `<poem>`) with its own closing tag, so the closes of the outer elements are found and a closing tag
+//!   never closes an element it did not open. Skipped regions pair with their closing tags at any depth.
 //!
-//! Lookaheads are bounded or consume what they scan: a tag name, an entity or a magic word, a link target up
-//! to its first `[`, `{`, `}`, `]`, `|` or newline, a heading line. The searches that are not (the `>` that
-//! ends a tag, the closing tag of a skipped region) keep what they found, so an open tag with no `>` or an
-//! unclosed `<nowiki>` costs one search, not one per opener.
+//! The pass is linear by construction. Lookaheads are bounded or consume what they scan: a tag name, an
+//! entity or a magic word, a link target up to its first `[`, `{`, `}`, `]`, `|` or newline (a link's
+//! namespace is read once), an extension tag up to its `>` or the next `<`, a heading line, a comment. The
+//! searches that are not keep what they found and only move forward: the `>` that ends an HTML tag, and the
+//! closing tags of the text (`Closers`), read once and kept by name with a cursor per name, which answer
+//! where a skipped region ends and whether an open element's closing tag cuts it first.
 //!
 //! # Places
 //!
@@ -69,11 +73,16 @@
 //! `<nowiki>` and `<pre>` keep their raw content; `[[a|b]]` is `b` and `[[a]]` is `a` (without a leading colon
 //! or a namespace prefix; files, categories and interlanguage links are removed, as the text rules remove
 //! them); `[url label]` is `label`; `''` and `'''` are removed; HTML tags are removed and keep their text
-//! (`<br>` is a space); whitespace is collapsed. Beyond R53, as the parser reads them too, character entities
-//! are decoded and magic words (`__TOC__`) removed; the parser's tables of both are its own, so each one met
-//! is asked of the parser once. An external link's label (the `title` of a `bare_link` citation) follows the
-//! walk's rules for one (`label_of` in `walk/mod.rs`): tags and their content add nothing, a link without a
-//! label adds its target.
+//! (`<br>` is a space); whitespace is collapsed.
+//!
+//! Beyond R53, and accepted by R55: character entities are decoded and magic words (`__TOC__`) removed, as
+//! the parser reads them. The parser's tables of both are its own, so each snippet met (bounded:
+//! `MAX_ENTITY_NAME`, `MAX_MAGIC_WORD`) is parsed by the vendored parser once and the answer cached.
+//!
+//! An external link's label (the `title` of a `bare_link` citation) follows the walk's rules for one
+//! (`label_of` in `walk/mod.rs`): tags and their content add nothing, nor does a nested external link, and a
+//! link without a label adds its target. It is read only when the citations collector keeps it, in a ref's
+//! body.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -153,6 +162,8 @@ struct Item {
     inner: (usize, usize),
     /// A link's `|`.
     pipe: Option<usize>,
+    /// A link's namespace (its target's prefix, without a leading colon).
+    ns: Option<i32>,
     /// A template's separators, in order: `|`, `=`, `:` and their bytes.
     seps: Vec<(usize, u8)>,
 }
@@ -261,19 +272,22 @@ struct Scanner<'t, 's> {
     seps: Vec<(usize, u8)>,
     /// Heading lines met, the same way: one inside an element that closes is dropped.
     heads: Vec<Head>,
-    /// `{{` met past the depth cap and not closed yet.
-    excess: usize,
+    /// Openers met past the depth cap and not closed yet, innermost last: they pair with their closers but
+    /// open no element (R56).
+    ghosts: Vec<Ghost>,
+    /// Of the ghosts: the `{{`, and the tags by name.
+    ghost_braces: usize,
+    ghost_tags: HashMap<String, usize>,
     /// Open templates and parameters, refs, ref lists, and tags by name: a closer without an opener costs
     /// nothing.
     braces: usize,
     refs: usize,
     lists: usize,
     tags: HashMap<String, usize>,
-    /// Open refs, ref lists and tags together.
+    /// Open refs, ref lists and tags together, ghosts included.
     open_tags: usize,
-    /// Per skipped-region tag (`nowiki`, `pre`, `math`): the last search for its closing tag, from where, and
-    /// what it found.
-    closers: [Option<(usize, RegionEnd)>; 3],
+    /// The closing tags of the text, as far as they have been asked for.
+    closers: Closers,
     /// The last search for a `>`, from where, and what it found.
     gt: Option<(usize, Option<usize>)>,
     /// Character entities by source (`&nbsp;`), as the parser decodes them.
@@ -307,15 +321,22 @@ fn find(b: &[u8], from: usize, needle: &[u8]) -> Option<usize> {
     hay.windows(needle.len()).position(|w| w == needle).map(|i| from + i)
 }
 
-/// What the search for a skipped region's closing tag found.
-#[derive(Clone, Debug)]
-enum RegionEnd {
-    /// Its closing tag: start and end.
-    Closer(usize, usize),
-    /// First, the closing tag of an open element, at this position and of this name.
-    Conflict(usize, String),
-    /// Neither, up to the end of the text.
-    Nothing,
+/// An opener met past the depth cap.
+enum Ghost {
+    Braces,
+    /// A paired extension tag, by name.
+    Tag(String),
+}
+
+/// The closing tags of the text (`</name>` as the parser reads one in a plain-text tag, `plain_closer`), found
+/// by one forward-only scan as far as they are asked for, and kept by name with a forward-only cursor per
+/// name. Questions come in text order, so every closing tag is read once and passed once per name.
+#[derive(Default)]
+struct Closers {
+    /// The scan has read the text up to here.
+    scanned: usize,
+    /// Per lowercased name: its closing tags (start, end) in order, and the first not yet passed.
+    by_name: HashMap<String, (Vec<(usize, usize)>, usize)>,
 }
 
 impl<'t, 's> Scanner<'t, 's> {
@@ -328,13 +349,15 @@ impl<'t, 's> Scanner<'t, 's> {
             frames: Vec::new(),
             seps: Vec::new(),
             heads: Vec::new(),
-            excess: 0,
+            ghosts: Vec::new(),
+            ghost_braces: 0,
+            ghost_tags: HashMap::new(),
             braces: 0,
             refs: 0,
             lists: 0,
             tags: HashMap::new(),
             open_tags: 0,
-            closers: [None, None, None],
+            closers: Closers::default(),
             gt: None,
             entities: RefCell::new(HashMap::new()),
             magic_words: RefCell::new(HashMap::new()),
@@ -347,7 +370,48 @@ impl<'t, 's> Scanner<'t, 's> {
 
     /// No element opens: past the depth cap.
     fn full(&self) -> bool {
-        self.excess > 0 || self.frames.len() >= DEFAULT_DEPTH_CAP
+        !self.ghosts.is_empty() || self.frames.len() >= DEFAULT_DEPTH_CAP
+    }
+
+    fn ghost_open(&mut self, g: Ghost) {
+        match &g {
+            Ghost::Braces => self.ghost_braces += 1,
+            Ghost::Tag(name) => {
+                *self.ghost_tags.entry(name.clone()).or_default() += 1;
+                self.open_tags += 1;
+            }
+        }
+        self.ghosts.push(g);
+    }
+
+    fn ghost_pop(&mut self) -> Ghost {
+        let g = self.ghosts.pop().expect("a ghost");
+        match &g {
+            Ghost::Braces => self.ghost_braces -= 1,
+            Ghost::Tag(name) => {
+                *self.ghost_tags.get_mut(name).expect("counted") -= 1;
+                self.open_tags -= 1;
+            }
+        }
+        g
+    }
+
+    /// A closer pairs with the innermost ghost of its kind (`None`: `}}`), dropping the unclosed ones inside it.
+    fn ghost_close(&mut self, name: Option<&str>) {
+        loop {
+            match (self.ghost_pop(), name) {
+                (Ghost::Braces, None) => return,
+                (Ghost::Tag(t), Some(n)) if t == n => return,
+                _ => {}
+            }
+        }
+    }
+
+    /// A closer pairs with an open element under the ghosts: the ghosts never close.
+    fn ghosts_drop(&mut self) {
+        while !self.ghosts.is_empty() {
+            self.ghost_pop();
+        }
     }
 
     fn top(&self) -> Option<Kind> {
@@ -377,7 +441,7 @@ impl<'t, 's> Scanner<'t, 's> {
 
     fn push(&mut self, kind: Kind, start: usize, inner: (usize, usize), pipe: Option<usize>, tag: Option<String>) {
         let k = self.items.len();
-        self.items.push(Item { kind, start, end: start, closed: false, next: k + 1, inner, pipe, seps: Vec::new() });
+        self.items.push(Item { kind, start, end: start, closed: false, next: k + 1, inner, pipe, ns: None, seps: Vec::new() });
         self.count(kind, tag.as_deref(), true);
         self.frames.push(Frame { item: k, seps: self.seps.len(), heads: self.heads.len(), tag });
     }
@@ -385,7 +449,7 @@ impl<'t, 's> Scanner<'t, 's> {
     /// An element found whole: a self-closing tag, a link without a label, a skipped region.
     fn complete(&mut self, kind: Kind, start: usize, end: usize, inner: (usize, usize)) {
         let k = self.items.len();
-        self.items.push(Item { kind, start, end, closed: true, next: k + 1, inner, pipe: None, seps: Vec::new() });
+        self.items.push(Item { kind, start, end, closed: true, next: k + 1, inner, pipe: None, ns: None, seps: Vec::new() });
     }
 
     /// The innermost open element never closes: no component; what it met is its parent's.
@@ -428,10 +492,10 @@ impl<'t, 's> Scanner<'t, 's> {
             i = match c {
                 b'\n' => {
                     // An external link ends on its line or is none.
-                    while self.excess == 0 && self.top() == Some(Kind::ExtLink) {
+                    while self.ghosts.is_empty() && self.top() == Some(Kind::ExtLink) {
                         self.drop_top();
                     }
-                    if self.excess == 0 && matches!(self.top(), Some(Kind::Heading { .. })) {
+                    if self.ghosts.is_empty() && matches!(self.top(), Some(Kind::Heading { .. })) {
                         self.close_heading(i);
                     }
                     line_start = true;
@@ -448,7 +512,7 @@ impl<'t, 's> Scanner<'t, 's> {
                 }
                 b']' => self.close_bracket(i),
                 b'|' | b'=' | b':' => {
-                    if !self.frames.is_empty() && self.excess == 0 {
+                    if !self.frames.is_empty() && self.ghosts.is_empty() {
                         self.seps.push((i, c));
                     }
                     i + 1
@@ -457,9 +521,10 @@ impl<'t, 's> Scanner<'t, 's> {
                 _ => i + 1,
             };
         }
+        self.ghosts_drop();
         while let Some(top) = self.top() {
             match top {
-                Kind::Heading { .. } if self.excess == 0 => self.close_heading(n),
+                Kind::Heading { .. } => self.close_heading(n),
                 _ => self.drop_top(),
             }
         }
@@ -512,7 +577,7 @@ impl<'t, 's> Scanner<'t, 's> {
 
     fn open_braces(&mut self, i: usize) -> usize {
         if self.full() {
-            self.excess += 1;
+            self.ghost_open(Ghost::Braces);
             return i + 2;
         }
         if self.at(i + 2) == b'{' {
@@ -524,13 +589,14 @@ impl<'t, 's> Scanner<'t, 's> {
     }
 
     fn close_braces(&mut self, i: usize) -> usize {
-        if self.excess > 0 {
-            self.excess -= 1;
+        if self.ghost_braces > 0 {
+            self.ghost_close(None);
             return i + 2;
         }
         if self.braces == 0 {
             return i + 2;
         }
+        self.ghosts_drop();
         while !matches!(self.top(), Some(Kind::Template | Kind::Param)) {
             self.drop_top();
         }
@@ -550,9 +616,9 @@ impl<'t, 's> Scanner<'t, 's> {
 
     fn open_link(&mut self, i: usize) -> usize {
         // A link opening in the label of a link that is no file's: the parser reads the outer one as text.
-        if let Some(f) = self.frames.last().filter(|_| self.excess == 0) {
+        if let Some(f) = self.frames.last().filter(|_| self.ghosts.is_empty()) {
             let it = &self.items[f.item];
-            if it.kind == Kind::Link && self.link_namespace(it) != Some(6) {
+            if it.kind == Kind::Link && it.ns != Some(6) {
                 self.drop_top();
             }
         }
@@ -567,11 +633,13 @@ impl<'t, 's> Scanner<'t, 's> {
                 None | Some(b'\n' | b'[' | b'{' | b'}') => return i + 1,
                 Some(b']') if self.at(j + 1) == b']' => {
                     self.complete(Kind::Link, i, j + 2, (t, j));
+                    self.set_link_namespace();
                     return j + 2;
                 }
                 Some(b']') => return i + 1,
                 Some(b'|') => {
                     self.push(Kind::Link, i, (t, j), Some(j), None);
+                    self.set_link_namespace();
                     self.seps.push((j, b'|'));
                     return j + 1;
                 }
@@ -581,7 +649,7 @@ impl<'t, 's> Scanner<'t, 's> {
     }
 
     fn close_bracket(&mut self, i: usize) -> usize {
-        if self.excess == 0 {
+        if self.ghosts.is_empty() {
             match self.top() {
                 Some(Kind::ExtLink) => {
                     self.close_top(i + 1, i);
@@ -597,47 +665,47 @@ impl<'t, 's> Scanner<'t, 's> {
         i + 1
     }
 
+    /// The first closing tag named `name` at or after `from`: its start and end. `from` never decreases
+    /// between questions about one name.
+    fn closer_of(&mut self, name: &str, from: usize) -> Option<(usize, usize)> {
+        loop {
+            if let Some((list, cursor)) = self.closers.by_name.get_mut(name) {
+                while *cursor < list.len() && list[*cursor].0 < from {
+                    *cursor += 1;
+                }
+                if let Some(&c) = list.get(*cursor) {
+                    return Some(c);
+                }
+            }
+            // Read on to the next closing tag of any name; past the last one, every answer is `None`.
+            let Some(p) = find(self.b, self.closers.scanned.max(from), b"</") else {
+                self.closers.scanned = self.b.len();
+                return None;
+            };
+            self.closers.scanned = p + 2;
+            if let Some((n, end)) = self.plain_closer(p) {
+                self.closers.by_name.entry(n).or_default().0.push((p, end));
+            }
+        }
+    }
+
     /// The closing tag of a skipped region `name` whose open tag ends at `from`: its start and end. `None` when
     /// the text ends first, or when the closing tag of an open element comes first, as the parser lets a
     /// plain-text tag be closed by nothing else and then reads its open tag as text.
-    ///
-    /// A search from an earlier position answers when what it found is still ahead (and, for a closing tag of
-    /// an open element, the element is still open), so that unclosed regions cost one search, not one per open
-    /// tag. An element opened between the two positions whose closing tag lies in the region is not seen then.
     fn region_end(&mut self, name: &str, from: usize) -> Option<(usize, usize)> {
-        let slot = match name {
-            "nowiki" => 0,
-            "pre" => 1,
-            _ => 2,
-        };
-        if let Some((searched_from, found)) = &self.closers[slot] {
-            if from >= *searched_from {
-                match found {
-                    RegionEnd::Closer(s, e) if *s >= from => return Some((*s, *e)),
-                    RegionEnd::Conflict(p, n) if *p >= from && self.is_open(n) => return None,
-                    RegionEnd::Nothing => return None,
-                    _ => {}
-                }
+        let own = self.closer_of(name, from)?;
+        let mut open: Vec<String> = Vec::new();
+        if self.open_tags > 0 {
+            open.extend(["ref", "references"].into_iter().filter(|n| self.is_open(n)).map(String::from));
+            open.extend(self.tags.iter().filter(|(_, &c)| c > 0).map(|(n, _)| n.clone()));
+            open.extend(self.ghost_tags.iter().filter(|(_, &c)| c > 0).map(|(n, _)| n.clone()));
+        }
+        for n in open {
+            if self.closer_of(&n, from).is_some_and(|(p, _)| p < own.0) {
+                return None;
             }
         }
-        let b = self.b;
-        let mut k = from;
-        let found = loop {
-            match find(b, k, b"</") {
-                None => break RegionEnd::Nothing,
-                Some(p) => match self.plain_closer(p) {
-                    Some((n, end)) if n == name => break RegionEnd::Closer(p, end),
-                    Some((n, _)) if self.open_tags > 0 && self.is_open(&n) => break RegionEnd::Conflict(p, n),
-                    _ => k = p + 2,
-                },
-            }
-        };
-        let answer = match found {
-            RegionEnd::Closer(s, e) => Some((s, e)),
-            _ => None,
-        };
-        self.closers[slot] = Some((from, found));
-        answer
+        Some(own)
     }
 
     /// Where the comment opening at `i` ends: after its `-->`; at the closing tag of an open element in it,
@@ -678,13 +746,14 @@ impl<'t, 's> Scanner<'t, 's> {
         }
     }
 
-    /// An open ref, ref list or tag of this name.
+    /// An open ref, ref list or tag of this name, a ghost one included.
     fn is_open(&self, name: &str) -> bool {
-        match name {
+        let real = match name {
             "ref" => self.refs > 0,
             "references" => self.lists > 0,
             _ => self.tags.get(name).is_some_and(|&n| n > 0),
-        }
+        };
+        real || self.ghost_tags.get(name).is_some_and(|&n| n > 0)
     }
 
     /// The first `>` at or after `from`, from the cache when it can answer.
@@ -749,7 +818,13 @@ impl<'t, 's> Scanner<'t, 's> {
             return open_end;
         }
         match name.as_str() {
-            _ if self.full() => self.complete(Kind::Mute, i, open_end, (open_end, open_end)),
+            _ if self.full() => {
+                // Past the depth cap a tag opens no element, but it pairs with its own closing tag (R56).
+                self.complete(Kind::Mute, i, open_end, (open_end, open_end));
+                if !self_closing {
+                    self.ghost_open(Ghost::Tag(name));
+                }
+            }
             "ref" | "references" => {
                 let kind = if name == "ref" { Kind::Ref } else { Kind::RefList };
                 match self_closing {
@@ -784,13 +859,18 @@ impl<'t, 's> Scanner<'t, 's> {
             return i + 1;
         }
         let end = k + 1;
+        if self.ghost_tags.get(name).is_some_and(|&n| n > 0) {
+            self.ghost_close(Some(name));
+            self.complete(Kind::Mute, i, end, (end, end));
+            return end;
+        }
         let open = match name {
             "ref" => self.refs,
             "references" => self.lists,
             _ => self.tags.get(name).copied().unwrap_or(0),
         };
         if open > 0 {
-            self.excess = 0;
+            self.ghosts_drop();
             loop {
                 let f = self.frames.last().expect("an open element of that name");
                 let matched = match self.items[f.item].kind {
@@ -852,18 +932,22 @@ impl<'t, 's> Scanner<'t, 's> {
         Layout { name, colon, params }
     }
 
-    /// The namespace of a link's target, when it has a prefix and no leading colon.
-    fn link_namespace(&self, it: &Item) -> Option<i32> {
+    /// The link just added gets its namespace: its target's prefix, when it has no leading colon.
+    fn set_link_namespace(&mut self) {
+        let it = self.items.last().expect("a link");
         let target = self.text[it.inner.0..it.inner.1].trim();
-        let (prefix, _) = target.split_once(':').filter(|_| !target.starts_with(':'))?;
-        self.settings.namespace(prefix)
+        let ns = match target.split_once(':') {
+            Some((prefix, _)) if !target.starts_with(':') => self.settings.namespace(prefix),
+            _ => None,
+        };
+        self.items.last_mut().expect("a link").ns = ns;
     }
 
     /// A link whose text the text rules remove: a file, a category, an interlanguage link; in an external
     /// link's label (`label`), a file or a category, which the parser makes no link of.
     fn link_muted(&self, it: &Item, label: bool) -> bool {
         let target = self.text[it.inner.0..it.inner.1].trim();
-        matches!(self.link_namespace(it), Some(6 | 14)) || (!label && walk::is_interlanguage(self.settings, target))
+        matches!(it.ns, Some(6 | 14)) || (!label && walk::is_interlanguage(self.settings, target))
     }
 
     /// Where an external link's label starts: at the first whitespace after its URL, outside the elements in it.
@@ -952,7 +1036,8 @@ impl<'t, 's> Scanner<'t, 's> {
                     }
                     (pos, k) = (it.end, it.next);
                 }
-                Kind::ExtLink => match self.label_start(k) {
+                // In a label, an external link adds nothing, as `label_of` skips one.
+                Kind::ExtLink if !label => match self.label_start(k) {
                     Some(l) => {
                         ends.push((it.end - 1, 1));
                         (pos, k) = (l, k + 1);
@@ -1113,8 +1198,10 @@ impl<'t, 's> Scanner<'t, 's> {
                     open.push(Open { item: k - 1, end: it.end, slot, params: Vec::new() });
                 }
                 _ => {
-                    let label =
-                        self.label_start(k - 1).map(|l| self.strip_as(l, it.end - 1, true)).filter(|l| !l.is_empty());
+                    // The label is read only when the citations collector keeps it (a link in a ref's body).
+                    let label = || {
+                        self.label_start(k - 1).map(|l| self.strip_as(l, it.end - 1, true)).filter(|l| !l.is_empty())
+                    };
                     collect.external_link(span, label, place);
                 }
             }
