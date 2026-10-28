@@ -117,14 +117,30 @@ fn empty_names_do_not_panic() {
         let r = run_page(text, "wikipedia");
         assert_eq!(r.page.status, "ok", "{text}");
     }
-    let t = templates("{{|x}}");
-    if let Some(t) = t.first() {
-        assert_eq!((t.name.as_str(), t.kind.as_str()), ("", "template"));
+    // The parser yields a row for an empty name, and none for an unterminated template or `{{{{}}}}`.
+    for text in ["{{}}", "{{|x}}", "{{ }}"] {
+        let t = templates(text);
+        assert_eq!(t.len(), 1, "{text}");
+        assert_eq!((t[0].name.as_str(), t[0].name_raw.as_str(), t[0].kind.as_str()), ("", "", "template"));
     }
-    let t = templates("{{}}");
-    if let Some(t) = t.first() {
-        assert_eq!((t.name.as_str(), t.name_raw.as_str(), t.kind.as_str()), ("", "", "template"));
+    for text in ["{{a|", "{{{{}}}}"] {
+        assert_eq!(templates(text).len(), 0, "{text}");
     }
+    let t = templates("{{:x}}");
+    assert_eq!((t.len(), t[0].name.as_str(), t[0].kind.as_str()), (1, ":x", "template"));
+    let t = templates("{{#}}");
+    assert_eq!((t.len(), t[0].name.as_str(), t[0].kind.as_str()), (1, "#", "parser_function"));
+}
+
+#[test]
+fn namespace_prefix_makes_a_template() {
+    let t = templates("{{Шаблон:PAGENAME}}");
+    assert_eq!(t[0].kind, "template");
+    let t = templates("{{DEFAULTSORT:X}}");
+    assert_eq!((t[0].name.as_str(), t[0].kind.as_str()), ("dEFAULTSORT", "parser_function"));
+    assert_eq!(params(&t[0].params), vec![("1", true, "X")]);
+    let t = templates("{{PAGENAME:x}}");
+    assert_eq!((t[0].name.as_str(), t[0].kind.as_str()), ("pAGENAME", "parser_function"));
 }
 
 #[test]
@@ -163,10 +179,17 @@ fn spans_round_trip_on_the_corpus() {
             assert!(c.sections.get(t.section_id as usize).is_some());
             assert_eq!(t.para_id.is_some(), t.para_offset.is_some());
             n_templates += 1;
-            for p in &t.params {
+            for (i0, p) in t.params.iter().enumerate() {
                 let whole = text.get(p.start as usize..p.end as usize).expect("param span on char boundaries");
                 assert!(t.start <= p.start && p.end <= t.end);
-                assert!(p.value_raw.is_empty() || whole.contains(&p.value_raw) || t.kind != "template", "{whole:?} {:?}", p.value_raw);
+                // The colon parameter of a module or parser function: exactly its trimmed text. Any
+                // other parameter's span holds its value.
+                let colon_param = i0 == 0 && matches!(t.kind.as_str(), "module" | "parser_function") && t.name_raw.contains(':');
+                if colon_param {
+                    assert_eq!(whole, p.value_raw);
+                } else {
+                    assert!(whole.contains(&p.value_raw), "{whole:?} {:?}", p.value_raw);
+                }
                 assert_eq!(p.value_raw, p.value_raw.trim());
                 assert!(!p.value_text.contains("  ") && p.value_text == p.value_text.trim());
                 n_params += 1;

@@ -96,11 +96,15 @@ impl<'t, 's> Templates<'t, 's> {
         });
         let head = colon.and_then(|c| self.text.get(name_start..c)).map(str::trim);
         let whole = self.settings.template_name(name_raw);
-        let kind = if head.is_some_and(|h| norm(h) == "#invoke") {
+        // An explicit template-namespace prefix transcludes the page: never a function or a variable.
+        let prefixed = head.is_some_and(|h| self.settings.namespace(h) == Some(10));
+        let kind = if prefixed {
+            "template"
+        } else if head.is_some_and(|h| norm(h) == "#invoke") {
             "module"
         } else if name_raw.starts_with('#') || head.is_some_and(|h| self.settings.is_parser_function(h)) {
             "parser_function"
-        } else if self.settings.is_variable(&whole) {
+        } else if self.settings.is_variable(name_raw) {
             "variable"
         } else {
             "template"
@@ -162,7 +166,9 @@ impl<'t, 's> Templates<'t, 's> {
         });
     }
 
-    /// The name part of the open template closes with the text after its colon.
+    /// The name part of the open template closes with the text after its colon. Order: the colon
+    /// parameter is pushed (empty text) when the template opens, so it is `params[0]` here; the name part
+    /// closes before any `Param`, so the later parameters are pushed after it.
     pub(super) fn set_split_text(&mut self, text: String) {
         if let Some(o) = self.open.last() {
             if let Some(p) = self.rows[o.row].params.first_mut() {
@@ -171,7 +177,8 @@ impl<'t, 's> Templates<'t, 's> {
         }
     }
 
-    /// The value of a parameter closes with its text.
+    /// The value of a parameter closes with its text. Its `Param` closes right after (the value part is
+    /// the last child), and `close_param` takes the text then.
     pub(super) fn set_pending(&mut self, text: String) {
         if let Some(o) = self.open.last_mut() {
             o.pending = text;
