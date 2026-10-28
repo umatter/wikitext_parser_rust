@@ -156,9 +156,6 @@ fn linear_time_on_other_adversarial_inputs() {
         // quadratic search took 41 s and 35 s on these (1.8 MB and 1.6 MB).
         "{{a|<ref><nowiki>}}{{a|<references><nowiki>}}".repeat(40_000) + "</references></ref>",
         "{{a|<ref><pre>}}{{a|<references><pre>}}".repeat(40_000) + "</references></ref>",
-        // Nested external links in a ref, each label holding the inner ones: quadratic in time and memory
-        // (2.7 s at 1.5 MB).
-        "<ref>".to_string() + &"[http://a.ru x ".repeat(399) + &"y".repeat(2_000_000) + &"]".repeat(399) + "</ref>",
     ];
     for t in &cases {
         let s = std::time::Instant::now();
@@ -166,6 +163,16 @@ fn linear_time_on_other_adversarial_inputs() {
         let secs = s.elapsed().as_secs_f64();
         assert!(secs < 2.0, "{secs} s on {:?}...", &t[..20]);
     }
+}
+
+/// Nested external links in a ref, each label holding the inner ones, were quadratic in time and memory: 3.6 s
+/// and 798 MB of titles at 2 MB. The bound is on the bytes built, which does not depend on the machine.
+#[test]
+fn nested_external_link_labels_stay_linear() {
+    let t = "<ref>".to_string() + &"[http://a.ru x ".repeat(399) + &"y".repeat(2_000_000) + &"]".repeat(399) + "</ref>";
+    let c = fallback::scan(&t, &ru(), &reg());
+    let title_bytes: usize = c.citations.iter().filter_map(|c| c.title.as_ref()).map(String::len).sum();
+    assert!(title_bytes <= 2 * t.len(), "{title_bytes} title bytes on {} bytes of markup", t.len());
 }
 
 #[test]
