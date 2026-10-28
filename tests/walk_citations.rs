@@ -102,7 +102,7 @@ fn sfn_has_no_rows_but_harvnb_has_one() {
     assert_eq!(c.len(), 1);
     assert_eq!((c[0].family.as_str(), c[0].template_name.as_deref(), c[0].url.clone()), ("short", Some("harvnb"), None));
     assert_eq!(c[0].params.len(), 2);
-    assert_eq!(c[0].harv_key, None);
+    assert_eq!(c[0].harv_key.as_deref(), Some("CITEREFИванов1990"));
 }
 
 #[test]

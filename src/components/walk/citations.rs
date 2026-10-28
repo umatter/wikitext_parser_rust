@@ -33,9 +33,25 @@
 //! - `authors` collects, in source order, every parameter whose name (without trailing digits) is a base of
 //!   the entry's `authors` list: `last`+`first` of one number as `"last, first"`; a `first` alone is none.
 //! - `year` is the `year` field, else the first 4-digit run between 1000 and 2100 in `date_raw`.
-//! - `template_id`, `template_name` and `params` are the template's; `harv_key` is left to Task 17.
+//! - `template_id`, `template_name` and `params` are the template's; `harv_key` follows the CITEREF rules below.
+//!
+//! # CITEREF keys (`harv_key`)
+//!
+//! - `citeref(names, year)` = `"CITEREF"` + each name trimmed, inner whitespace as `_`, + year.
+//! - A citation (not family short): with a non-empty `harv_ref` that is not `harv` (any case):
+//!   `citeref([harv_ref], year)`. Else with names, `citeref(names, year)`: the non-empty parameters of the
+//!   entry's `harv_names` in order (`last1`..`last4`), else the surnames of `authors` (text before the first
+//!   space or comma), up to four. Else none. An empty `harv_ref` (including a template value, whose
+//!   `value_text` is empty) is absent.
+//! - The year is the `year` field as digits; if the year parameter or `date_raw` carries `\d{4}[a-zа-я]`
+//!   for that year, with the letter standing alone, the letter is kept (`1990a`). A year parameter that is a
+//!   whole date (`04.08.2009`) is used as written: pages key their sfn calls by it. Without a year, no key
+//!   unless `harv_ref` gives one (then with an empty year).
+//! - A citation of family short (`harvnb`, `sfn0`) takes its key by the sfn rule (`sfn_key`) on its
+//!   positional parameters, and is no target of resolution.
 //!
 //! # Rows
+//!
 //!
 //! - A template row has the template's span and parent; a `bare_link` the link's span and its parent; a
 //!   `plain_text` row the ref's span and the ref as parent. All are placed where the walk met them.
@@ -44,6 +60,9 @@
 //! - `fp` = `fp(family + "\u{1f}" + (url, else norm(title + " " + authors) if any, else norm(text)))`.
 
 use std::collections::HashSet;
+use std::sync::LazyLock;
+
+use regex::Regex;
 
 use parse_wiki_text_2::Node;
 
@@ -125,6 +144,81 @@ fn year_in(s: &str) -> Option<i32> {
         run.clear();
     }
     None
+}
+
+/// `CITEREF` + the names (each trimmed, inner whitespace as `_`) + the year.
+pub fn citeref(names: &[&str], year: &str) -> String {
+    let mut out = String::from("CITEREF");
+    for n in names {
+        out.push_str(&n.split_whitespace().collect::<Vec<_>>().join("_"));
+    }
+    out.push_str(year);
+    out
+}
+
+static YEAR_PARAM: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\d{4}[a-zа-я]?$").expect("year regex"));
+/// A year parameter that is a whole date (`04.08.2009`): sfn keys of such pages carry it as written.
+static YEAR_DATE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\d{1,2}\.\d{1,2}\.\d{4}$").expect("date regex"));
+static YEAR_LETTER: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(\d{4})([a-zа-я])(?:[^a-zа-я]|$)").expect("letter regex"));
+
+/// The key of a short footnote or short citation: the positional parameters up to the first that looks like
+/// a year are the names, that one the year (no year: all are names). `None` without a name.
+pub(super) fn sfn_key(t: &TemplateRow) -> Option<String> {
+    let mut names = Vec::new();
+    let mut year = "";
+    for p in t.params.iter().filter(|p| p.positional) {
+        let v = p.value_text.trim();
+        if YEAR_PARAM.is_match(v) {
+            year = v;
+            break;
+        }
+        if !v.is_empty() {
+            names.push(v);
+        }
+    }
+    (!names.is_empty()).then(|| citeref(&names, year))
+}
+
+/// The surname of an author: the text before the first space or comma.
+fn surname(a: &str) -> &str {
+    a.trim().split(|c: char| c.is_whitespace() || c == ',').next().unwrap_or("")
+}
+
+/// The key of a citation of a template of a non-short family.
+fn harv_key(row: &CitationRow, t: &TemplateRow, e: &TemplateEntry) -> Option<String> {
+    let year_param = text_of(t, e, "year").map(|v| v.trim().to_string()).filter(|v| YEAR_DATE.is_match(v));
+    let year = row.year.map(|y| y.to_string());
+    let year = year.map(|y| {
+        if let Some(d) = &year_param {
+            return d.clone();
+        }
+        let sources = [text_of(t, e, "year"), row.date_raw.clone()];
+        let letter = sources.iter().flatten().find_map(|s| {
+            YEAR_LETTER.captures_iter(s).find(|c| c[1] == y).map(|c| c[2].to_string())
+        });
+        y + letter.as_deref().unwrap_or("")
+    });
+    let hr = text_of(t, e, "harv_ref").map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
+    if let Some(r) = hr.as_deref().filter(|r| !r.eq_ignore_ascii_case("harv")) {
+        return Some(citeref(&[r], year.as_deref().unwrap_or("")));
+    }
+    let mut names: Vec<&str> = e
+        .fields
+        .get("harv_names")
+        .into_iter()
+        .flatten()
+        .filter_map(|n| param(t, n, false))
+        .map(|p| p.value_text.trim())
+        .filter(|v| !v.is_empty())
+        .collect();
+    if names.is_empty() {
+        names = row.authors.iter().map(|a| surname(a)).filter(|s| !s.is_empty()).collect();
+    }
+    names.truncate(4);
+    match (names.is_empty(), &year) {
+        (false, Some(y)) => Some(citeref(&names, y)),
+        _ => None,
+    }
 }
 
 /// The last parameter named `name` with a non-empty value.
@@ -485,6 +579,10 @@ fn fill_from_template(row: &mut CitationRow, t: &TemplateRow, e: &TemplateEntry)
     row.isbn = text_of(t, e, "isbn");
     row.doi = text_of(t, e, "doi");
     row.access_date_raw = text_of(t, e, "access_date_raw");
+    row.harv_key = match e.family.as_deref() {
+        Some("short") => sfn_key(t),
+        _ => harv_key(row, t, e),
+    };
 }
 
 fn wrapper_of(t: &TemplateRow, e: &TemplateEntry) -> Wrapper {

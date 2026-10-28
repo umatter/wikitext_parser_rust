@@ -150,7 +150,8 @@ fn short_footnote_bodies_and_merged_entries() {
     );
     assert_ne!(c.refs[0].fp, c.refs[1].fp);
     assert!(c.refs[0].fp == c.refs[2].fp && c.refs[0].fp == c.refs[3].fp);
-    assert!(c.refs.iter().all(|r| r.kind == "template" && r.resolved && r.def_ref_id.is_none()));
+    // R50: a short footnote is resolved when it cites a citation; this page has none.
+    assert!(c.refs.iter().all(|r| r.kind == "template" && !r.resolved && r.def_ref_id.is_none()));
     // Identical short footnotes are one entry, as MediaWiki merges them: 1990 and 2001.
     assert_eq!(c.ref_lists[0].n_entries, 2);
     // An sfn alias is a short footnote too; one without parameters has no body.

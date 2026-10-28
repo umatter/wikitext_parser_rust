@@ -45,7 +45,8 @@
 //! - `n_uses` (on `named` and named `list_defined` refs, else `None`) counts the refs of its (group, name): the
 //!   definition and everything that points to it.
 //! - `resolved` is true for a ref with a body and for any ref whose (group, name) has a definition (a reuse,
-//!   a footnote template given only a name); false otherwise. Task 17 settles it for `{{sfn}}`.
+//!   a footnote template given only a name); false otherwise. For a short footnote (and a ref holding a short
+//!   citation) it is whether it cites a citation (`link_short`, R50).
 //! - A list's `n_entries` is the number of definitions in its group on the page: refs with a body that are
 //!   not a later copy of an earlier definition. Identical short footnotes (same group and `norm(body_text)`)
 //!   count once, as MediaWiki merges them; each call keeps its own row.
@@ -57,7 +58,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::attrs;
 use crate::fingerprint::{fp, norm};
-use crate::model::{RefListRow, RefRow, TemplateRow};
+use crate::model::{CitationRow, RefListRow, RefRow, TemplateRow};
 use crate::registry::{Registry, TemplateEntry};
 use crate::spans::CharIndex;
 
@@ -321,6 +322,9 @@ impl<'t, 's> Refs<'t, 's> {
         (row.body_raw, row.body_text) = if blank(&raw) { Default::default() } else { (raw, body_text) };
         row.name = last_param(t, "name").filter(|n| !n.is_empty()).map(str::to_string);
         row.group = group;
+        if short {
+            row.harv_key = super::citations::sfn_key(t);
+        }
         self.short[id] = short;
     }
 
@@ -349,11 +353,12 @@ impl<'t, 's> Refs<'t, 's> {
     }
 
     /// The rows, with list groups and sections, resolution and fingerprints settled, and each place
-    /// resolved by `resolve` into `para_id` and `para_offset`.
+    /// resolved by `resolve` into `para_id` and `para_offset`. The third value says which refs are short
+    /// footnotes.
     pub(super) fn finish(
         mut self,
         resolve: impl Fn(Place) -> (Option<i32>, Option<i32>),
-    ) -> (Vec<RefRow>, Vec<RefListRow>) {
+    ) -> (Vec<RefRow>, Vec<RefListRow>, Vec<bool>) {
         for (row, place) in self.rows.iter_mut().zip(&self.places) {
             (row.para_id, row.para_offset) = resolve(*place);
         }
@@ -403,7 +408,31 @@ impl<'t, 's> Refs<'t, 's> {
             l.n_entries = entries.get(&l.group).copied().unwrap_or(0);
             l.fp = fp(&format!("{}\u{1f}{}\u{1f}{}", l.kind, l.group, name));
         }
-        (self.rows, self.lists)
+        (self.rows, self.lists, self.short)
+    }
+}
+
+/// Links short footnotes to the citations they cite (R50), once refs and citations are both finished.
+///
+/// A short footnote (`{{sfn}}`, already holding its `harv_key`), and a ref whose body holds a citation of
+/// family short (it takes the first one's key), get `cites_citation_id` = the lowest id of a citation that is
+/// not of family short with an equal `harv_key`; their `resolved` is whether one was found.
+pub(super) fn link_short(refs: &mut [RefRow], citations: &[CitationRow], is_short: &[bool]) {
+    let mut targets: HashMap<&str, i32> = HashMap::new();
+    for c in citations.iter().filter(|c| c.family != "short") {
+        if let Some(k) = c.harv_key.as_deref() {
+            targets.entry(k).or_insert(c.id);
+        }
+    }
+    for (r, &sfn) in refs.iter_mut().zip(is_short) {
+        if !sfn {
+            match citations.iter().find(|c| c.ref_id == Some(r.id) && c.family == "short") {
+                Some(c) => r.harv_key = c.harv_key.clone(),
+                None => continue,
+            }
+        }
+        r.cites_citation_id = r.harv_key.as_deref().and_then(|k| targets.get(k).copied());
+        r.resolved = r.cites_citation_id.is_some();
     }
 }
 

@@ -291,7 +291,13 @@ fn check_page(pg: &Page, c: &Components, reg: &Registry, site: &str, n: &mut [us
         }
         let want_uses = r.name.is_some() && matches!(r.kind.as_str(), "named" | "list_defined");
         ck(r.n_uses.is_some() == want_uses, "n_uses", &|| format!("{:?}", r.n_uses));
-        ck(r.resolved == (has_body(r) || r.def_ref_id.is_some()), "resolved", &|| r.resolved.to_string());
+        // R50: a ref with a harv_key (a short footnote, or a ref holding a short citation) is resolved when it
+        // cites a citation; the others keep the body-or-definition meaning.
+        let want_resolved = match r.harv_key {
+            Some(_) => r.cites_citation_id.is_some(),
+            None => has_body(r) || r.def_ref_id.is_some(),
+        };
+        ck(r.resolved == want_resolved, "resolved", &|| r.resolved.to_string());
         ck(r.fp.len() == 16, "fp", &|| r.fp.clone());
         n[2] += 1;
     }
@@ -330,7 +336,7 @@ fn check_page(pg: &Page, c: &Components, reg: &Registry, site: &str, n: &mut [us
         ck(x.fp.len() == 16, "fp", &|| x.fp.clone());
         ck(x.host.is_none() || x.url.is_some(), "host needs url", &String::new);
         ck(x.registrable_domain.is_none() || x.host.is_some(), "registrable_domain needs host", &String::new);
-        ck(x.harv_key.is_none(), "harv_key left to Task 17", &String::new);
+        ck(x.harv_key.as_deref().is_none_or(|k| k.starts_with("CITEREF") && k.len() > 7), "harv_key shape", &String::new);
         ck(matches!(x.context.as_str(), "in_ref" | "bibliography" | "other"), "context", &|| x.context.clone());
         ck((x.context == "in_ref") == x.ref_id.is_some(), "ref_id with context", &|| format!("{} {:?}", x.context, x.ref_id));
         let outer = x.ref_id.and_then(|r| c.refs.get(r as usize));

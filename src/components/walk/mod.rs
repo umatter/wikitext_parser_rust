@@ -47,6 +47,7 @@ use crate::registry::Registry;
 use crate::settings::Settings;
 use crate::spans::CharIndex;
 
+pub use citations::citeref;
 use citations::Citations;
 use refs::Refs;
 use sections::Sections;
@@ -118,9 +119,10 @@ pub fn walk(
     let Walker { paras, templates, refs, citations, sections, .. } = w;
     let resolve = |place| resolve_place(&paras, place);
     let templates = templates.finish(resolve);
-    let (refs, ref_lists) = refs.finish(resolve);
+    let (mut refs, ref_lists, is_short) = refs.finish(resolve);
     let sections = sections.finish(text, &chars, registry);
     let citations = citations.finish(resolve, &sections);
+    refs::link_short(&mut refs, &citations, &is_short);
     Ok(Components { templates, refs, ref_lists, citations, sections, paragraphs: paras.finish() })
 }
 
