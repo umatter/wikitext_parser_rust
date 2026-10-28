@@ -593,7 +593,7 @@ fn write_atomic(path: &Path, text: &str) -> Result<()> {
     Ok(())
 }
 
-/// Runs the whole job. Configuration errors (labels, sites, tables, inputs) fail before any output.
+/// Runs the whole job. Configuration errors (labels, sites, registry, tables, inputs) fail before any output.
 /// A failure inside one input is recorded under `failed_inputs`, its parts stay `.tmp`, and the run
 /// goes on with the next input; the caller exits non-zero when `failed_inputs` is not empty.
 pub fn run(args: &RunArgs) -> Result<Manifest> {

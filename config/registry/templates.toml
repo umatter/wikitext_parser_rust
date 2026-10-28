@@ -1,12 +1,17 @@
 # Template registry. One [[template]] per entry.
-#   name, aliases   normalised like Settings::template_name (case of the first letter, `_`, spaces)
+#   name, aliases   written without a namespace prefix (Load rejects any ':'); normalised by the rule
+#                   "_" as a space, whitespace collapsed, first letter lowercased
 #   role            infobox | citation | footnote | ref_list | link_status | inline_text | interlanguage
 #                   | navigation | maintenance | other
 #   family          citation kind (web, news, book, journal, encyclopedia, other_template) or note kind
 #   archive_wrapper true for a template that only wraps an archive link ({{webarchive}}, {{wayback}})
 #   site            "wikipedia" or "ruwiki" to limit the entry to one site; absent means both
-#   [template.fields]  canonical key -> parameter names, in order of preference. Positional
-#                   parameters are named "1", "2", ...
+#   [template.fields]  canonical key -> parameter names, in order of preference. Names match
+#                   ParamRow.name exactly: case-sensitive after trimming, so list each case variant needed.
+#                   Positional parameters are named "1", "2", ...
+#                   A scalar field takes the first listed parameter that is present and non-empty.
+#                   The list fields (authors, harv_names) are read by the citation and sfn code: authors
+#                   collects every present one, in order, with lastN + firstN combined.
 # Parameter names come from the public corpus (tests/corpus/wikipedia_v1.parquet) and from the
 # documented parameters of the templates.
 

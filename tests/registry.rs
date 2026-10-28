@@ -144,11 +144,20 @@ site = "wikipedia"
 
 #[test]
 fn names_and_aliases_are_normalised_on_load() {
-    let t = "[[template]]\nname = \"Cite_Foo  bar\"\naliases = [\"Шаблон:Ал Ис\"]\nrole = \"other\"\n";
+    let t = "[[template]]\nname = \"Cite_Foo  bar\"\naliases = [\"Ал_Ис\"]\nrole = \"other\"\n";
     let d = dir_with("norm", t, SECTIONS_OK);
     let r = Registry::load(&d).unwrap();
     let _ = std::fs::remove_dir_all(&d);
     assert!(r.template("cite Foo bar", "wikipedia").is_some());
+    assert!(r.template("ал Ис", "wikipedia").is_some());
+}
+
+#[test]
+fn namespace_prefixed_names_and_aliases_are_rejected() {
+    let e = load_err("pfx_name", "[[template]]\nname = \"Шаблон:Cite web\"\nrole = \"other\"\n", SECTIONS_OK);
+    assert!(e.contains("Шаблон:Cite web"), "{e}");
+    let e = load_err("pfx_alias", "[[template]]\nname = \"a\"\naliases = [\"Ш:b\"]\nrole = \"other\"\n", SECTIONS_OK);
+    assert!(e.contains("\"a\"") && e.contains("Ш:b"), "{e}");
 }
 
 #[test]

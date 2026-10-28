@@ -87,7 +87,7 @@ fn read(path: &Path) -> Result<(String, Vec<u8>)> {
     Ok((text, bytes))
 }
 
-/// Registry names carry no namespace prefix, so only `_`, whitespace and the first letter are normalised.
+/// Registry names carry no namespace prefix (`load` rejects a `:`), so only `_`, whitespace and the first letter are normalised.
 fn entry_key(raw: &str) -> String {
     normalize_template_name(raw, |_| false)
 }
@@ -120,6 +120,15 @@ impl Registry {
     }
 
     fn add_template(&mut self, raw: RawTemplate) -> Result<()> {
+        for written in std::iter::once(&raw.name).chain(raw.aliases.iter()) {
+            if written.contains(':') {
+                bail!(
+                    "template \"{}\": {:?} contains ':'; write names and aliases without a namespace prefix",
+                    raw.name,
+                    written
+                );
+            }
+        }
         let name = entry_key(&raw.name);
         if name.is_empty() {
             bail!("a template entry has an empty name");
