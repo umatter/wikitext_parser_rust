@@ -50,6 +50,7 @@ xxhash-rust = { version = "0.8.19", features = ["xxh3"] }
 psl = "2"
 url = "2"
 idna = "1.1.0"
+similar = "3"
 
 [build-dependencies]
 sha2 = "0.11"

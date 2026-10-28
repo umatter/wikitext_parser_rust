@@ -12,11 +12,19 @@ pub fn public_corpus() -> Vec<CorpusRow> {
     corpus::load(Path::new("tests/corpus/wikipedia_v1.parquet")).expect("public corpus loads")
 }
 
+/// The private corpus file: `WIKITEXT_PRIVATE_CORPUS`, else `DEFAULT_PRIVATE`.
+pub fn private_path() -> PathBuf {
+    PathBuf::from(std::env::var("WIKITEXT_PRIVATE_CORPUS").unwrap_or_else(|_| DEFAULT_PRIVATE.to_string()))
+}
+
+/// The hand-counted facts of Ruwiki versions, which live next to the private corpus and are never committed.
+pub fn private_facts_path() -> PathBuf {
+    private_path().with_file_name("parser_facts_ruwiki.toml")
+}
+
 /// Ruwiki rows of the private corpus, or `None` when the file is absent.
 pub fn private_corpus(test: &str) -> Option<Vec<CorpusRow>> {
-    let path = PathBuf::from(
-        std::env::var("WIKITEXT_PRIVATE_CORPUS").unwrap_or_else(|_| DEFAULT_PRIVATE.to_string()),
-    );
+    let path = private_path();
     if !path.exists() {
         eprintln!("SKIPPED (private corpus absent): {test}");
         return None;

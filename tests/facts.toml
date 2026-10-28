@@ -1,0 +1,188 @@
+# Facts read from the markup (Task 19, Ruling R59). Each [[fact]] is one page version of the public corpus
+# (tests/corpus/wikipedia_v1.parquet, Russian Wikipedia, CC BY-SA 4.0; see tests/corpus/ATTRIBUTION.md).
+#
+# Counted from a plain dump of the `wikitext` column by reading every <ref>, footnote template, citation
+# template and heading of the version, helped only by regular-expression and brace-matching listings of the
+# raw markup (never by this library or its output). Absent keys are not checked. The keys, in the terms of the
+# output tables (tests/facts.rs computes the same from a parse):
+#   refs_inline, refs_named, refs_reuse, refs_list_defined, refs_template
+#                          <ref> tags and footnote templates ({{sfn}}, {{efn}}, ...) by kind, as SCHEMA defines
+#                          the kinds: unnamed ref = inline, named with a body = named, named without = reuse,
+#                          inside a <references> or ref-list template = list_defined, footnote template = template
+#   ref_lists              <references> tags and ref-list templates ({{примечания}}, {{reflist}}, ...)
+#   citations_by_family    citation rows by family: each citation template in a ref body or outside refs
+#                          (not one nested in another's parameter; archive wrappers merge into the row before
+#                          them), each bracketed external link in a ref body outside citation templates
+#                          (bare_link), and one plain_text row for a ref body with neither; reuses and {{sfn}}
+#                          have no rows
+#   hosts                  the distinct hosts of those rows' URLs, sorted (lowercase, no leading "www.", the
+#                          original of an archive URL)
+#   reuse_targets          the name of every reuse whose definition is on the page, sorted, one per reuse
+#   reuses_unresolved      reuses without a definition on the page
+#   sfn_keys               the CITEREF key of every {{sfn}} whose target is on the page, sorted, one per use
+#                          (the target's key is ref= plus the year, as the plan's CITEREF rules read it)
+#   sfn_unresolved         {{sfn}} calls whose target is not on the page
+#   sections               heading titles after the lead, in document order, as displayed
+#   archived_originals     the original URL of every citation row with an archive link, sorted, one per row
+
+[[fact]]
+page_id = "3068499"
+version = "wiki_forkday"
+refs_inline = 0
+refs_named = 4
+refs_reuse = 2
+refs_list_defined = 0
+refs_template = 0
+ref_lists = 1
+citations_by_family = { encyclopedia = 1, other_template = 2, web = 1 }
+hosts = []
+reuse_targets = ["БСЭ", "ГВР"]
+reuses_unresolved = 0
+sfn_keys = []
+sfn_unresolved = 0
+sections = ["Примечания"]
+archived_originals = []
+
+[[fact]]
+page_id = "3404160"
+version = "wiki_2025"
+refs_inline = 0
+refs_named = 1
+refs_reuse = 2
+refs_list_defined = 0
+refs_template = 0
+ref_lists = 1
+citations_by_family = { web = 1 }
+hosts = []
+reuse_targets = ["ГВР", "ГВР"]
+reuses_unresolved = 0
+sfn_keys = []
+sfn_unresolved = 0
+sections = ["Данные водного реестра", "Примечания"]
+archived_originals = []
+
+[[fact]]
+page_id = "5477281"
+version = "deleted_wiki_2025"
+refs_inline = 3
+refs_named = 0
+refs_reuse = 0
+refs_list_defined = 0
+refs_template = 0
+ref_lists = 1
+citations_by_family = { bare_link = 3 }
+hosts = ["cyberleninka.ru", "mtvuutiset.fi", "olympics.com"]
+reuse_targets = []
+reuses_unresolved = 0
+sfn_keys = []
+sfn_unresolved = 0
+sections = ["Фамилия", "Примечания", "См. также"]
+archived_originals = []
+
+[[fact]]
+page_id = "3036657"
+version = "wiki_forkday"
+refs_inline = 13
+refs_named = 4
+refs_reuse = 3
+refs_list_defined = 0
+refs_template = 0
+ref_lists = 1
+citations_by_family = { bare_link = 5, other_template = 2, plain_text = 3, web = 7 }
+hosts = ["baltinfo.ru", "books.google.de", "dp.ru", "gay.ru", "old.brusov.am", "oxforddictionaries.com", "tandfonline.com", "taz.de", "travel.ru", "trud.ru", "wirtschaftslexikon.gabler.de"]
+reuse_targets = ["Oxford", "dp", "автоссылка1"]
+reuses_unresolved = 0
+sfn_keys = []
+sfn_unresolved = 0
+sections = ["Гей-френдли-маркетинг", "Концепция гей-френдли на рабочем месте", "См. также", "Примечания", "Ссылки"]
+archived_originals = ["http://gay.ru/news/rainbow/2011/06/12-20995.htm", "http://old.brusov.am/docs/SMO-final.pdf#page=90", "http://wirtschaftslexikon.gabler.de/Definition/diversity-management.html", "http://www.baltinfo.ru/print/2010/07/02/Google-povysil-zarplaty-geyam-i-lesbiyankam-151060", "http://www.dp.ru/a/2007/09/25/Druzheljubie_k_gejam_stalo_b/", "http://www.gay.ru/news/rainbow/2010/11/12-19415.htm", "http://www.oxforddictionaries.com/ru/определение/английский/gay-friendly", "http://www.taz.de/!5089739/", "http://www.trud.ru/article/08-09-2010/249912_netraditsionnaja_karjera.html", "http://www.trud.ru/article/08-09-2010/249912_netraditsionnaja_karjera/print", "https://books.google.de/books?id=m5XOAwAAQBAJ&pg=PA181", "https://www.travel.ru/news/2010/01/30/177123.html"]
+
+[[fact]]
+page_id = "1405676"
+version = "wiki_2025"
+refs_inline = 1
+refs_named = 0
+refs_reuse = 0
+refs_list_defined = 0
+refs_template = 14
+ref_lists = 1
+citations_by_family = { book = 5, journal = 3, plain_text = 1 }
+hosts = ["istoriya-kino.ru"]
+reuse_targets = []
+reuses_unresolved = 0
+sfn_keys = ["CITEREFГолутва_А.,_Аркус_Л.2004", "CITEREFКудрявцев_С.1998", "CITEREFПарамонова_К.1982", "CITEREFПарамонова_К.1982", "CITEREFПлахов_А.1980", "CITEREFРевич_В.1983", "CITEREFСоветское_кино,_70-е_годы1986", "CITEREFТолстых_А.В.1986", "CITEREFТолстых_А.В.1986", "CITEREFЩекочихин_Ю.1980", "CITEREFЩекочихин_Ю.1980", "CITEREFЩекочихин_Ю.1980", "CITEREFЩекочихин_Ю.1980", "CITEREFЩекочихин_Ю.1980"]
+sfn_unresolved = 0
+sections = ["Сюжет", "В ролях", "Места съемок", "Музыка", "Съёмочная группа", "Награды", "Оценки фильма", "Примечания", "Литература"]
+archived_originals = []
+
+[[fact]]
+page_id = "8744889"
+version = "deleted_wiki_2025"
+refs_inline = 6
+refs_named = 7
+refs_reuse = 15
+refs_list_defined = 0
+refs_template = 0
+ref_lists = 1
+citations_by_family = { web = 13 }
+hosts = ["avn.com", "hustlermagazine.com", "iafd.com", "orientaldaily.on.cc", "xbiz.com", "xczech.com"]
+reuse_targets = ["AVN21", "AVN21", "IAFD", "IAFD", "IAFD", "IAFD", "IAFD", "ODN", "ODN", "ODN", "XBIZEA20", "XBIZEA20article", "XBIZEA21", "XBIZEA22", "XBIZEA22"]
+reuses_unresolved = 0
+sfn_keys = []
+sfn_unresolved = 0
+sections = ["Карьера", "Награды и номинации", "Избранная фильмография", "Примечания", "Ссылки"]
+archived_originals = ["http://xczech.com/lika-star-exclusive-interview/", "https://avn.com/awards/2021_nominees", "https://avn.com/awards/2024_nominees", "https://orientaldaily.on.cc/cnt/adult/20201014/index.html", "https://www.iafd.com/person.rme/perfid=lollysmall/gender=f", "https://www.xbiz.com/news/255161/winners-announced-for-2020-xbiz-europa-awards", "https://www.xbiz.com/news/255299/old-world-glamour-star-power-elevate-1st-virtual-xbiz-europa-awards", "https://www.xbiz.com/news/255549/lika-star-leads-cast-of-roccos-psycho-teens-15-for-evil-angel", "https://www.xbiz.com/news/261139/2021-xbiz-europa-awards-nominees-announced", "https://www.xbiz.com/news/261746/winners-announced-for-2021-xbiz-europa-awards", "https://www.xbiz.com/news/267915/2022-xbiz-europa-awards-nominees-announced", "https://www.xbiz.com/news/276416/lika-star-is-hustlers-cover-honey-for-september"]
+
+[[fact]]
+page_id = "18714"
+version = "wiki_forkday"
+refs_inline = 13
+refs_named = 2
+refs_reuse = 0
+refs_list_defined = 0
+refs_template = 0
+ref_lists = 1
+citations_by_family = { bare_link = 3, book = 10, encyclopedia = 1, news = 1, web = 9 }
+hosts = ["1k.com.ru", "andersen.sdu.dk", "archive.org", "aroundtheglobe.ru", "bbc.co.uk", "books.google.com", "cphpost.dk", "feb-web.ru", "foto-video.ru", "kp.ru", "minorplanetcenter.net", "news.bbc.co.uk", "nytimes.com", "russia-armenia.info", "teatrandersena.pl"]
+reuse_targets = []
+reuses_unresolved = 0
+sfn_keys = []
+sfn_unresolved = 0
+sections = ["Биография", "Творчество", "Библиография", "Известные сказки", "Повести и романы", "Экранизации", "Мультипликация", "Диафильмы", "Фильмы об Андерсене", "Адаптации в музыке", "Память", "Монументы и скульптуры", "Интересные факты", "См. также", "Примечания", "Литература", "Ссылки"]
+archived_originals = ["http://1k.com.ru/iskusstvo/gans-xristian-andersen-beskonechnoe-odinochestvo-velikogo-skazochnika/", "http://cphpost.dk/news/international/unknown-hans-christian-andersen-fairy-tale-discovered", "http://feb-web.ru/feb/pushkin/serial/is1/is1-357-.htm", "http://news.bbc.co.uk/2/hi/asia-pacific/4782955.stm", "http://russia-armenia.info/node/43521", "http://www.bbc.co.uk/news/world-europe-20706230", "http://www.foto-video.ru/art/portfolio/1972/", "http://www.minorplanetcenter.net/iau/ECS/MPCArchive/1985/MPC_19850702.pdf", "http://www.teatrandersena.pl", "https://andersen.sdu.dk/centret/", "https://www.aroundtheglobe.ru/europe/denmark/cities-regions/copenhagen/places/rosenborg-castle/", "https://www.kp.ru/daily/23723.4/54130/", "https://www.nytimes.com/books/01/05/20/reviews/010520.20allent.html"]
+
+[[fact]]
+page_id = "56095"
+version = "wiki_2025"
+refs_inline = 33
+refs_named = 6
+refs_reuse = 5
+refs_list_defined = 0
+refs_template = 1
+ref_lists = 1
+citations_by_family = { bare_link = 11, book = 9, journal = 4, news = 2, plain_text = 7, web = 8 }
+hosts = ["americanpregnancy.org", "apa.org", "archive.org", "bbc.co.uk", "books.google.ru", "britannica.com", "ecuabookblog.wordpress.com", "healthyminds.org", "journals.sagepub.com", "mkb-10.com", "neuronet.ru", "news.gallup.com", "nytimes.com", "pediatrics.aappublications.org", "psychiatry.ru", "psychology.org.au", "rakurs.ucoz.com", "sciencedirect.com", "sexarchive.info", "slovari.yandex.ru", "theguardian.com", "umt.edu", "vmg.pp.ua", "williamsinstitute.law.ucla.edu"]
+reuse_targets = ["Katz", "Katz", "Sex_orient", "Мастерc У., Джонсон В., Колодни", "Мастерc У., Джонсон В., Колодни"]
+reuses_unresolved = 0
+sfn_keys = ["CITEREFТрансгендерность_и_гетеронормативность2012"]
+sfn_unresolved = 0
+sections = ["Основные понятия и термины", "Гетеросексуальность и гетеросексуальная ориентация", "Гетеросексуальная ориентация и гетеросексуальное поведение", "Демография", "Академическое исследование", "Биологические и экологические факторы", "Пренатальные гормоны", "Животные и размножение", "Гетеросексуальное поведение", "Сексуальная техника гетеросексуалов", "Гетеронормативность", "Примечания", "Литература"]
+archived_originals = ["http://psychiatry.ru/lib/1/book/88", "http://rakurs.ucoz.com/biblioteka/pospelova_o.v-karagapolova_i.v-transgendernost_i_g.pdf", "http://slovari.yandex.ru/dict/psychlex6", "http://slovari.yandex.ru/dict/psychlex6", "http://www.apa.org/about/governance/council/policy/sexual-orientation.aspx", "http://www.apa.org/helpcenter/sexual-orientation.aspx", "http://www.apa.org/pi/lgbt/resources/therapeutic-response.pdf", "http://www.healthyminds.org/More-Info-For/GayLesbianBisexuals.aspx", "http://www.healthyminds.org/More-Info-For/GayLesbianBisexuals.aspx", "http://www.neuronet.ru/bibliot/b003/sx04025d.html", "http://www.psychology.org.au/publications/tip_sheets/orientation/", "http://www.psychology.org.au/publications/tip_sheets/orientation/", "http://www.sciencedirect.com/science/article/pii/S0022519304001584", "http://www.sexarchive.info/GESUND/ARCHIV/ATLAS_DE/atlas.htm", "http://www.umt.edu/sociology/faculty_staff/ellestad/documents/275_Katz1990_s10.pdf", "https://americanpregnancy.org/preventing-pregnancy/pregnancy-myths/", "https://ecuabookblog.wordpress.com/2013/03/12/the-invention-of-heterosexuality-jonathan-ned-katz/", "https://journals.sagepub.com/doi/10.1177/1529100616637616", "https://mkb-10.com/index.php?pid=4368", "https://news.gallup.com/poll/158066/special-report-adults-identify-lgbt.aspx", "https://pediatrics.aappublications.org/content/113/6/1827", "https://williamsinstitute.law.ucla.edu/research/census-lgbt-demographics-studies/how-many-people-are-lesbian-gay-bisexual-and-transgender/", "https://www.apa.org/topics/sexual-orientation", "https://www.bbc.co.uk/programmes/b00tznbk", "https://www.britannica.com/topic/human-sexual-activity", "https://www.nytimes.com/1992/12/08/science/sexual-behavior-levels-compared-in-studies-in-britain-and-france.html", "https://www.theguardian.com/lifeandstyle/2008/oct/26/relationships"]
+
+[[fact]]
+page_id = "6839340"
+version = "deleted_wiki_2025"
+refs_inline = 13
+refs_named = 9
+refs_reuse = 12
+refs_list_defined = 0
+refs_template = 17
+ref_lists = 1
+citations_by_family = { bare_link = 3, book = 10, journal = 15, news = 3, other_template = 1, web = 18 }
+hosts = ["1tv.ru", "archives.cjr.org", "bbc.com", "books.google.ch", "ceeol.com", "charter97.org", "colta.ru", "cyberleninka.ru", "economist.com", "fakty.ictv.ua", "faz.net", "meduza.io", "novayagazeta.ru", "nytimes.com", "pnap.ap.edu.pl", "politico.eu", "republic.ru", "s3.amazonaws.com", "taylorfrancis.com", "theatlantic.com", "thediplomat.com", "themoscowtimes.com", "trouw.nl", "tvrain.ru", "wilsonquarterly.com", "wsj.com", "youtube.com"]
+reuse_targets = [":0", ":0", "BBC", "BBC", "Slon", "Slon", "Slon", "facty", "ngru", "НГ 2015", "НГ 2015", "НГ 2015 2"]
+reuses_unresolved = 0
+sfn_keys = ["CITEREFDanilova2014", "CITEREFFrye2015", "CITEREFKhaldarova,_Pantti2016", "CITEREFKinstler2017", "CITEREFKramer2017", "CITEREFMonshipouri2016", "CITEREFNalbandov2016", "CITEREFOstrovsky2015", "CITEREFRaabe,_Sapper2015", "CITEREFSatter2016", "CITEREFSkillen2016", "CITEREFSnyder2017", "CITEREFThe_Economist2016", "CITEREFThe_Economist2016", "CITEREFVan_Herpen2015", "CITEREFVanderMey2016", "CITEREFИссерс2015"]
+sfn_unresolved = 0
+sections = ["Сюжет", "Расследование", "Оценки", "В массовой культуре", "См. также", "Примечания", "Литература", "Ссылки"]
+archived_originals = ["http://fakty.ictv.ua/ru/ukraine/polituka/20140714-1521089/", "http://pnap.ap.edu.pl/index.php/pnap/article/view/559", "http://www.1tv.ru/news/2014-12-21/31502-zhurnalisty_pervogo_otvechayut_na_obvineniya_vo_lzhi_v_svyazi_s_syuzhetom_pro_ubiystvo_rebenka_v_slavyanske", "http://www.bbc.com/russian/news-37845060", "http://www.bbc.com/russian/russia/2014/07/140714_tr_tv_fake_child_ukraine.shtml", "http://www.colta.ru/articles/society/8167", "http://www.faz.net/aktuell/feuilleton/wie-man-in-russland-ueber-teures-gemuese-berichtet-14874618.html", "https://meduza.io/paragraph/2021/04/11/zhurnalisty-dozhdya-pogovorili-s-toy-samoy-zhenschinoy-rasskazavshey-pervomu-kanalu-pro-raspyatogo-malchika-v-2014-godu-ona-prodolzhaet-utverzhdat-chto-eta-istoriya-pravda", "https://republic.ru/fast/russia/zhurnalisty-ne-nashli-podtverzhdeniya-syuzhetu-pervogo-kanala-o-raspyatom-v-slavyanske-rebenke-1126851.xhtml", "https://themoscowtimes.com/news/state-run-news-station-accused-of-making-up-child-crucifixion-37289", "https://tvrain.ru/teleshow/fake_news/ekskljuziv_fake_news-527992/", "https://www.1tv.ru/news/2014-07-12/37175-bezhenka_iz_slavyanska_vspominaet_kak_pri_ney_kaznili_malenkogo_syna_i_zhenu_opolchentsa", "https://www.novayagazeta.ru/articles/2014/07/17/60385-tv-ledenyaschee-dushu", "https://www.novayagazeta.ru/articles/2015/07/15/64898-171-malchika-187-ne-bylo-no-on-zhivet", "https://www.novayagazeta.ru/articles/2015/07/15/64898-171-malchika-187-ne-bylo-no-on-zhivet", "https://www.taylorfrancis.com/chapters/edit/10.4324/9780429462030-23/fake-news-irina-khaldarova-mervi-pantti", "https://www.trouw.nl/home/de-schadelijke-informatiemachine-van-poetin~a29b1d53/", "https://www.wsj.com/articles/arkady-ostrovsky-putins-ukraine-unreality-show-1406590397", "https://www.youtube.com/watch?v=W9BjogewWXk", "https://www.youtube.com/watch?v=xM-2AHlcvXE"]

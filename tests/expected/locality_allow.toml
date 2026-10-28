@@ -1,0 +1,33 @@
+# Locality violations that are real long-range effects of an edit, not parser artefacts (tests/locality.rs).
+# One [[allow]] per violating component: page_id, versions = [old, new], table, fp, reason.
+# Private (Ruwiki) entries go in the gitignored tests/private/locality_allow.toml instead.
+# "provisional: fp definition sections.path": an ancestor heading was renamed, so the path, and with it the fp,
+# of a section whose own heading and text did not change differs (R62; the fp definition is not changed here).
+
+[[allow]]
+page_id = "7220"
+versions = ["wiki_forkday", "wiki_2025"]
+table = "sections"
+fp = "c0f022a3b90c0bcb"
+reason = "provisional: fp definition sections.path"
+
+[[allow]]
+page_id = "7220"
+versions = ["wiki_forkday", "wiki_2025"]
+table = "sections"
+fp = "823f9ef2e602b194"
+reason = "provisional: fp definition sections.path"
+
+[[allow]]
+page_id = "7220"
+versions = ["wiki_forkday", "wiki_2025"]
+table = "sections"
+fp = "627fc226feb2dd82"
+reason = "provisional: fp definition sections.path"
+
+[[allow]]
+page_id = "7220"
+versions = ["wiki_forkday", "wiki_2025"]
+table = "sections"
+fp = "89d31753aebefc48"
+reason = "provisional: fp definition sections.path"
