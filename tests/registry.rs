@@ -197,7 +197,7 @@ fn invalid_content_is_rejected() {
     assert!(load_err("role", "[[template]]\nname = \"a\"\nrole = \"bogus\"\n", SECTIONS_OK).contains("bogus"));
     assert!(load_err("field", &ok("[template.fields]\nbogus_key = [\"x\"]\n"), SECTIONS_OK).contains("bogus_key"));
     assert!(load_err("unk", &ok("colour = \"red\"\n"), SECTIONS_OK).contains("colour"));
-    assert!(load_err("site", &ok("site = \"enwiki\"\n"), SECTIONS_OK).contains("enwiki"));
+    assert!(load_err("bad_site", &ok("site = \"enwiki\"\n"), SECTIONS_OK).contains("enwiki"));
     assert!(load_err("unk2", "[[template]]\nname = \"a\"\nrole = \"other\"\n", "[[section]]\nrole = \"notes\"\ntitles = []\nextra = 1\n").contains("extra"));
     assert!(load_err("secdup", "", "[[section]]\nrole = \"notes\"\ntitles = [\"Лит\"]\n[[section]]\nrole = \"see_also\"\ntitles = [\"лит\"]\n").contains("лит"));
 }
