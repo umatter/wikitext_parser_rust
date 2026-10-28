@@ -1,0 +1,5 @@
+А<ref>{{cite web |url=https://web.archive.org/web/20200101000000/https://tass.ru/politika/1 |title=Т}}</ref>.
+Б<ref>{{cite news |url=https://ria.ru/2020/a.html |title=Р |archive-url=https://web.archive.org/web/2021/https://ria.ru/2020/a.html |archive-date=2021-01-01}}</ref>.
+В<ref>[https://www.bbc.co.uk/news/1 BBC] {{webarchive |url=https://web.archive.org/web/2019/https://www.bbc.co.uk/news/1 |date=2019}}</ref>.
+Г<ref>{{статья |автор=А. Б. |заглавие=С |ссылка=http://old.example.org/x |издание=Журнал |год=2005}} {{недоступная ссылка}}</ref>.
+Д<ref>{{wayback |url=http://gov.ru/a |date=20150101}}</ref>.

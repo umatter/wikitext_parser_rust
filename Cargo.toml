@@ -1,6 +1,6 @@
 [package]
 name = "wikitext_parser_rust"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 edition = "2021"
 
 [[bin]]
@@ -19,10 +19,42 @@ path = "src/clean_parsed.rs"
 name = "parse_single"
 path = "src/parse_single.rs"
 
+[[bin]]
+name = "parse_components"
+path = "src/parse_components.rs"
+
+[[test]]
+name = "watchdog"
+path = "tests/watchdog.rs"
+required-features = ["test-hooks"]
+
+[lib]
+name = "wikitext_components"
+path = "src/components/lib.rs"
+
 [dependencies]
 parse_wiki_text = "0.1"
+parse-wiki-text-2 = { path = "vendor/parse-wiki-text-2" }
 parquet = "53.3.0"
 arrow = "53.3.0"
 clap = { version = "4.5", features = ["derive"] }
 anyhow = "1.0"
 regex = "1.10"
+sha2 = "0.11"
+toml = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+serde_arrow = { version = "0.15", features = ["arrow-53"] }
+rayon = "1"
+xxhash-rust = { version = "0.8.19", features = ["xxh3"] }
+psl = "2"
+url = "2"
+idna = "1.1.0"
+similar = "3"
+
+[build-dependencies]
+sha2 = "0.11"
+
+[features]
+# Test-only overrides of the watchdog (WIKITEXT_WATCHDOG_SECS, WIKITEXT_TEST_SLEEP_PAGE).
+test-hooks = []

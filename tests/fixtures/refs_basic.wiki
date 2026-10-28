@@ -1,0 +1,4 @@
+Текст<ref>Простой источник.</ref> и ещё<ref name="a">{{cite web |url=https://www.kremlin.ru/events/1 |title=Событие |website=Kremlin |date=2020-01-02}}</ref>. Повтор<ref name=a />.
+
+== Примечания ==
+{{примечания}}

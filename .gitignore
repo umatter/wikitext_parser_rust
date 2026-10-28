@@ -1,6 +1,5 @@
 # Rust build artifacts
 /target/
-Cargo.lock
 
 # Data directories
 /data/crossection_diff/
@@ -37,3 +36,7 @@ Cargo.lock
 __pycache__/
 *.pyc
 *.pyo
+!tests/corpus/*.parquet
+!tests/expected/*.parquet
+!tests/expected/structured/selected.tsv
+/tests/private/

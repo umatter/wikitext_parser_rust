@@ -1,0 +1,4 @@
+Начало<ref>{{cite web |url=http://a.ru |title=X</ref> текст {{незакрытый |a=b
+{| class="wikitable"
+| ячейка
+<ref name="z">Конец

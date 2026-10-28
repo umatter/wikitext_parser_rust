@@ -1,0 +1,1325 @@
+//! The fallback scanner: when the parse or the walk of a page fails (step budget, depth limit, panic), the page
+//! still yields its sections, refs, ref lists, templates and citations, so that a pathological version can be
+//! compared with its counterpart.
+//!
+//! # Scope (R54)
+//!
+//! `scan` emits sections, refs, ref lists, templates and citations, every row with `fallback = true`. It makes
+//! no paragraphs, so `para_id` and `para_offset` are `None` and the paragraphs table is empty. The rows come
+//! from the walk's own builders (`walk::Collect`, R52): the scanner emits the events the walker emits, so the
+//! rules of Tasks 13-17 (sections, templates, refs, citations, short footnotes) hold on both paths.
+//!
+//! # The pass
+//!
+//! One left-to-right pass over the bytes, with a stack of open elements (`Frame`) and no recursion, then one
+//! pass over what it found to emit the events in document order.
+//!
+//! - **Templates** `{{…}}` by brace counting: `{{` opens one, `}}` closes the nearest open one (a `{{{…}}}`
+//!   parameter is no component; one that meets `}}` without a third `}` is a template from its second brace,
+//!   as the parser reads it). Separators are the `|`, `=` and `:` met while a template is the innermost open
+//!   element: `|` splits parameters, the first `=` of a parameter names it, the first `:` before the first `|`
+//!   is the colon of a module or parser function. A `|` inside a link, an external link or a tag inside the
+//!   template therefore does not split it.
+//! - **Links** `[[target|label]]` (the target, up to `|` or `]]`, on one line and without `[`, `{`, `}`, is
+//!   not looked into) and **external links** `[url label]` (a `[` before one of the site's protocols, on one
+//!   line). A link opening in the label of a link that is no file's makes the outer one text, as in the parser.
+//! - **Tags**, case-insensitive, by a bounded lookahead for the name (`MAX_TAG_NAME` bytes), classed as the
+//!   parser classes them (`Settings::tag_class`): an unknown name is text. A tag ends at its first `>`, as the
+//!   parser ends it; an extension tag is none when a `<` comes first (the parser would read it, and read it
+//!   again as text when its element does not close: the scanner keeps to one pass). `<ref>` and
+//!   `<references>` are components; any other paired extension tag (`<poem>`, `<includeonly>`) is an element
+//!   whose content is scanned, and an unclosed one is text. An HTML start or end tag is one unit. `<nowiki>`
+//!   and `<math>` (the parser's plain-text tags) and `<pre>` are skipped regions, found with their closing
+//!   tag, as are comments `<!-- … -->`. A closing extension tag closes the nearest open element of its name;
+//!   as in the parser, it also ends a comment or a skipped region it is met in (a skipped region it cuts is
+//!   none), and an unclosed comment runs to the end.
+//!
+//!   `<pre>` is a skipped region by R54, as MediaWiki reads it; the vendored parser reads it as an HTML tag
+//!   and its content as wikitext, so a component or a heading inside `<pre>` is a row only on the parsed path.
+//! - **Headings**, as the parser reads them: a line that starts with `=` opens one, whose content starts after
+//!   the `=`s and the whitespace after them (newlines included) and ends at the first newline met while no
+//!   element opened in it is open; it is a heading when it ends with `=` (trailing spaces and tabs aside),
+//!   at the parser's level rule. It counts only outside templates, refs and every other element: one met
+//!   inside an element that closes is dropped when it closes. Skipped regions are never looked into.
+//! - **Malformed input.** A closer finds its opener under unclosed elements, which are dropped. An element
+//!   that never closes (an unclosed `{{`, `<ref>`, `[[`) is no component: its text stays, what it contained is
+//!   its parent's (components, heading lines and separators alike, as the parser's rescan would find them).
+//! - **Depth (R54, R56).** Past `DEFAULT_DEPTH_CAP` open elements no element opens and no component is made,
+//!   but counting goes on (`Ghost`): `{{` pairs with `}}` and a paired extension tag (`<ref>`, `<references>`,
+//!   `<poem>`) with its own closing tag, so the closes of the outer elements are found and a closing tag
+//!   never closes an element it did not open. Skipped regions pair with their closing tags at any depth.
+//!
+//! The pass is linear by construction. Lookaheads are bounded or consume what they scan: a tag name, an
+//! entity or a magic word, a link target up to its first `[`, `{`, `}`, `]`, `|` or newline (a link's
+//! namespace is read once), an extension tag up to its `>` or the next `<`, a heading line, a comment. The
+//! searches that are not keep what they found and only move forward: the `>` that ends an HTML tag, and the
+//! closing tags of the text (`Closers`), read once and kept by name with a cursor per name, which answer
+//! where a skipped region ends and whether an open element's closing tag cuts it first. The pass that emits
+//! the rows reads a range (a parameter value, a ref's body) by the items that start inside it and stops at its
+//! end, so each item is visited by the ranges it is in, not by every range before it. `scan_work` counts the
+//! work of both passes, and the tests bound it linearly in the input's length.
+//!
+//! # Places
+//!
+//! Each component is in the section of the last heading before it. With no paragraphs, the citations
+//! collector's bodies outside refs (R49: one per paragraph on the parsed path) are paragraph slots of the
+//! running text between top-level components (`Paras`): a slot ends at an empty line, at each list item and
+//! divider, and where a list or a preformatted block starts or ends, and one newline does not end it. A
+//! component inside another is in the slot of the outermost one, as on the parsed path an element inside
+//! excluded content takes the place of its outermost excluded ancestor.
+//!
+//! # Text (R53)
+//!
+//! `value_text`, `body_text` and `title_text` are a linear strip of the source: comments, templates,
+//! `{{{parameters}}}`, refs, ref lists, `<math>`, self-closing extension tags and the extension tags whose
+//! content the text rules exclude (`walk::EXCLUDED_TAGS`, `includeonly` among them, R29) are removed;
+//! `<nowiki>` and `<pre>` keep their raw content; `[[a|b]]` is `b` and `[[a]]` is `a` (without a leading colon
+//! or a namespace prefix; files, categories and interlanguage links are removed, as the text rules remove
+//! them); `[url label]` is `label`; `''` and `'''` are removed; HTML tags are removed and keep their text
+//! (`<br>` is a space); whitespace is collapsed.
+//!
+//! Beyond R53, and accepted by R55: character entities are decoded and magic words (`__TOC__`) removed, as
+//! the parser reads them. The parser's tables of both are its own, so each snippet met (bounded:
+//! `MAX_ENTITY_NAME`, `MAX_MAGIC_WORD`) is parsed by the vendored parser once and the answer cached.
+//!
+//! An external link's label (the `title` of a `bare_link` citation) follows the walk's rules for one
+//! (`label_of` in `walk/mod.rs`): tags and their content add nothing, nor does a nested external link, and a
+//! link without a label adds its target. It is read only when the citations collector keeps it, in a ref's
+//! body.
+
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
+
+use parse_wiki_text_2::Node;
+
+use crate::autolink::{self, FreeUrl};
+use crate::frontend;
+use crate::model::Components;
+use crate::page::DEFAULT_DEPTH_CAP;
+use crate::registry::Registry;
+use crate::settings::{Settings, TagClass};
+use crate::spans::CharIndex;
+use crate::walk::{self, trim_range, Collect, Flat, ParamEvent, Place, EXCLUDED_TAGS};
+
+/// The longest tag name looked for (`syntaxhighlight` has 15 bytes).
+const MAX_TAG_NAME: usize = 16;
+
+/// The longest character entity name looked for (`thetasym` has 8 bytes).
+const MAX_ENTITY_NAME: usize = 10;
+
+/// The longest magic word looked for, in bytes (`БЕЗ_РЕДАКТИРОВАНИЯ_РАЗДЕЛА` has 49).
+const MAX_MAGIC_WORD: usize = 80;
+
+/// The sections, refs, ref lists, templates and citations of `text`, from one linear pass over it. Every row has
+/// `fallback = true`; there are no paragraphs.
+pub fn scan(text: &str, settings: &Settings, registry: &Registry) -> Components {
+    scan_work(text, settings, registry).0
+}
+
+/// `scan`, with the scanner's work: the steps of its main loop, the bytes its lookaheads read, the items the
+/// emitting pass visits and the bytes it reads. A test bound (`tests/fallback.rs`): it is linear in the input's
+/// length on every input, which a clock cannot check on a loaded machine.
+#[doc(hidden)]
+pub fn scan_work(text: &str, settings: &Settings, registry: &Registry) -> (Components, u64) {
+    let mut s = Scanner::new(text, settings);
+    s.run();
+    let chars = CharIndex::new(text);
+    let (mut c, work) = s.emit(&chars, registry);
+    c.sections.iter_mut().for_each(|r| r.fallback = true);
+    c.templates.iter_mut().for_each(|r| r.fallback = true);
+    c.refs.iter_mut().for_each(|r| r.fallback = true);
+    c.ref_lists.iter_mut().for_each(|r| r.fallback = true);
+    c.citations.iter_mut().for_each(|r| r.fallback = true);
+    (c, work)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Kind {
+    /// `{{…}}`.
+    Template,
+    /// `{{{…}}}`: no component; adds no text.
+    Param,
+    /// `[[…]]`.
+    Link,
+    /// `[url …]`.
+    ExtLink,
+    /// `<ref>…</ref>`, `<ref/>`.
+    Ref,
+    /// `<references>…</references>`, `<references/>`.
+    RefList,
+    /// Any other paired extension tag; `muted` when its content adds no text.
+    Tag { muted: bool },
+    /// A skipped region whose content is raw text: `<nowiki>`, `<pre>`.
+    Raw,
+    /// A skipped region that adds no text: a comment, `<math>`, a self-closing extension tag.
+    Mute,
+    /// An HTML start or end tag, as the parser reads one: a unit that adds nothing (`<br>` a space).
+    /// `inner` is its name.
+    Html,
+    /// A heading line, open until the newline that ends it. Its item never closes (the heading is a `Head`),
+    /// and it leaves the separators and headings met in it to its parent.
+    Heading { level: usize },
+}
+
+/// An element, in the order of its opener. Only a closed one is a component (or a link, a tag, a region).
+#[derive(Debug)]
+struct Item {
+    kind: Kind,
+    start: usize,
+    end: usize,
+    closed: bool,
+    /// Once closed: the index of the first item after its end (the items between are inside it).
+    next: usize,
+    /// Tags and skipped regions: the content, between the open tag and the closing tag. Links: the target.
+    inner: (usize, usize),
+    /// A link's `|`.
+    pipe: Option<usize>,
+    /// A link's namespace (its target's prefix, without a leading colon).
+    ns: Option<i32>,
+    /// A template's separators, in order: `|`, `=`, `:` and their bytes.
+    seps: Vec<(usize, u8)>,
+}
+
+/// An open element.
+struct Frame {
+    item: usize,
+    /// The lengths of `Scanner::seps` and `Scanner::heads` when it opened.
+    seps: usize,
+    heads: usize,
+    /// A tag's name.
+    tag: Option<String>,
+}
+
+/// A heading line: its span (from the line start to after the last `=`) and its level.
+#[derive(Clone, Copy, Debug)]
+struct Head {
+    start: usize,
+    end: usize,
+    level: usize,
+}
+
+/// The kind of a line of running text, for where paragraphs break.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum Line {
+    #[default]
+    Text,
+    /// `*`, `#`, `:`, `;`: each item is a paragraph.
+    Item,
+    /// A leading space: one preformatted block.
+    Pre,
+    /// `----`.
+    Divider,
+}
+
+/// The paragraph slots of the running text between top-level components, a stand-in for the walk's
+/// paragraphs that the citations collector groups bodies by outside refs (R49). A slot ends at an empty line,
+/// at each list item and divider, and where a list or a preformatted block starts or ends; one newline does
+/// not end it, and what a component spans is skipped.
+#[derive(Default)]
+struct Paras {
+    slot: usize,
+    /// Where the running text not yet read starts.
+    counted: usize,
+    /// Read up to a line start.
+    fresh: bool,
+    /// The kind of the current line, and whether an empty line came after it.
+    line: Line,
+    blank: bool,
+}
+
+impl Paras {
+    /// Read the running text up to `to`, where a component starts.
+    fn advance(&mut self, b: &[u8], to: usize) {
+        let mut i = self.counted;
+        if i == 0 {
+            self.fresh = true;
+        }
+        while i <= to {
+            if self.fresh {
+                self.fresh = false;
+                let mut j = i;
+                while j < to && matches!(b[j], b' ' | b'\t') {
+                    j += 1;
+                }
+                if j < to && b[j] == b'\n' {
+                    self.blank = true;
+                } else {
+                    let line = match b.get(i) {
+                        Some(b'*' | b'#' | b':' | b';') => Line::Item,
+                        Some(b' ') => Line::Pre,
+                        _ if b[i..].starts_with(b"----") => Line::Divider,
+                        _ => Line::Text,
+                    };
+                    if self.blank || line != self.line || matches!(line, Line::Item | Line::Divider) {
+                        self.slot += 1;
+                    }
+                    (self.line, self.blank) = (line, false);
+                }
+            }
+            match b[i..to].iter().position(|&c| c == b'\n') {
+                Some(p) => (i, self.fresh) = (i + p + 1, true),
+                None => break,
+            }
+        }
+        self.counted = to;
+    }
+}
+
+/// A template's name and parameters, read from its separators.
+struct Layout {
+    name: (usize, usize),
+    colon: Option<usize>,
+    /// Name span (named only), value span and span of each parameter.
+    params: Vec<(Option<(usize, usize)>, (usize, usize), (usize, usize))>,
+}
+
+struct Scanner<'t, 's> {
+    text: &'t str,
+    b: &'t [u8],
+    settings: &'s Settings,
+    items: Vec<Item>,
+    frames: Vec<Frame>,
+    /// Separators met inside elements; an element that closes takes (a template) or drops those met since it
+    /// opened, and one dropped unclosed leaves them to its parent.
+    seps: Vec<(usize, u8)>,
+    /// Heading lines met, the same way: one inside an element that closes is dropped.
+    heads: Vec<Head>,
+    /// Openers met past the depth cap and not closed yet, innermost last: they pair with their closers but
+    /// open no element (R56).
+    ghosts: Vec<Ghost>,
+    /// Of the ghosts: the `{{`, and the tags by name.
+    ghost_braces: usize,
+    ghost_tags: HashMap<String, usize>,
+    /// Open templates and parameters, refs, ref lists, and tags by name: a closer without an opener costs
+    /// nothing.
+    braces: usize,
+    refs: usize,
+    lists: usize,
+    tags: HashMap<String, usize>,
+    /// Open refs, ref lists and tags together, ghosts included.
+    open_tags: usize,
+    /// The closing tags of the text, as far as they have been asked for.
+    closers: Closers,
+    /// The last search for a `>`, from where, and what it found.
+    gt: Option<(usize, Option<usize>)>,
+    /// Character entities by source (`&nbsp;`), as the parser decodes them.
+    entities: RefCell<HashMap<String, Option<char>>>,
+    /// Magic words by source (`__TOC__`), as the parser reads them.
+    magic_words: RefCell<HashMap<String, bool>>,
+    /// The work done so far (`scan_work`).
+    work: Cell<u64>,
+}
+
+/// ASCII whitespace as the parser skips it.
+fn is_ws(b: u8) -> bool {
+    matches!(b, b'\t' | b'\n' | b' ')
+}
+
+fn skip_ws_forwards(b: &[u8], mut pos: usize) -> usize {
+    while pos < b.len() && is_ws(b[pos]) {
+        pos += 1;
+    }
+    pos
+}
+
+fn skip_ws_backwards(b: &[u8], mut pos: usize) -> usize {
+    while pos > 0 && is_ws(b[pos - 1]) {
+        pos -= 1;
+    }
+    pos
+}
+
+/// The first `needle` at or after `from`.
+fn find(b: &[u8], from: usize, needle: &[u8]) -> Option<usize> {
+    let hay = b.get(from..)?;
+    hay.windows(needle.len()).position(|w| w == needle).map(|i| from + i)
+}
+
+/// An opener met past the depth cap.
+enum Ghost {
+    Braces,
+    /// A paired extension tag, by name.
+    Tag(String),
+}
+
+/// The closing tags of the text (`</name>` as the parser reads one in a plain-text tag, `plain_closer`), found
+/// by one forward-only scan as far as they are asked for, and kept by name with a forward-only cursor per
+/// name. Questions come in text order, so every closing tag is read once and passed once per name.
+#[derive(Default)]
+struct Closers {
+    /// The scan has read the text up to here.
+    scanned: usize,
+    /// Per lowercased name: its closing tags (start, end) in order, and the first not yet passed.
+    by_name: HashMap<String, (Vec<(usize, usize)>, usize)>,
+}
+
+impl<'t, 's> Scanner<'t, 's> {
+    fn new(text: &'t str, settings: &'s Settings) -> Self {
+        Scanner {
+            text,
+            b: text.as_bytes(),
+            settings,
+            items: Vec::new(),
+            frames: Vec::new(),
+            seps: Vec::new(),
+            heads: Vec::new(),
+            ghosts: Vec::new(),
+            ghost_braces: 0,
+            ghost_tags: HashMap::new(),
+            braces: 0,
+            refs: 0,
+            lists: 0,
+            tags: HashMap::new(),
+            open_tags: 0,
+            closers: Closers::default(),
+            gt: None,
+            entities: RefCell::new(HashMap::new()),
+            magic_words: RefCell::new(HashMap::new()),
+            work: Cell::new(0),
+        }
+    }
+
+    /// Counts `n` units of work: steps, items visited or bytes read.
+    fn tick(&self, n: usize) {
+        self.work.set(self.work.get() + n as u64);
+    }
+
+    fn at(&self, i: usize) -> u8 {
+        self.b.get(i).copied().unwrap_or(0)
+    }
+
+    /// No element opens: past the depth cap.
+    fn full(&self) -> bool {
+        !self.ghosts.is_empty() || self.frames.len() >= DEFAULT_DEPTH_CAP
+    }
+
+    fn ghost_open(&mut self, g: Ghost) {
+        match &g {
+            Ghost::Braces => self.ghost_braces += 1,
+            Ghost::Tag(name) => {
+                *self.ghost_tags.entry(name.clone()).or_default() += 1;
+                self.open_tags += 1;
+            }
+        }
+        self.ghosts.push(g);
+    }
+
+    fn ghost_pop(&mut self) -> Ghost {
+        let g = self.ghosts.pop().expect("a ghost");
+        match &g {
+            Ghost::Braces => self.ghost_braces -= 1,
+            Ghost::Tag(name) => {
+                *self.ghost_tags.get_mut(name).expect("counted") -= 1;
+                self.open_tags -= 1;
+            }
+        }
+        g
+    }
+
+    /// A closer pairs with the innermost ghost of its kind (`None`: `}}`), dropping the unclosed ones inside it.
+    fn ghost_close(&mut self, name: Option<&str>) {
+        loop {
+            match (self.ghost_pop(), name) {
+                (Ghost::Braces, None) => return,
+                (Ghost::Tag(t), Some(n)) if t == n => return,
+                _ => {}
+            }
+        }
+    }
+
+    /// A closer pairs with an open element under the ghosts: the ghosts never close.
+    fn ghosts_drop(&mut self) {
+        while !self.ghosts.is_empty() {
+            self.ghost_pop();
+        }
+    }
+
+    fn top(&self) -> Option<Kind> {
+        self.frames.last().map(|f| self.items[f.item].kind)
+    }
+
+    fn count(&mut self, kind: Kind, tag: Option<&str>, up: bool) {
+        if matches!(kind, Kind::Ref | Kind::RefList | Kind::Tag { .. }) {
+            match up {
+                true => self.open_tags += 1,
+                false => self.open_tags -= 1,
+            }
+        }
+        let n = match kind {
+            Kind::Template | Kind::Param => &mut self.braces,
+            Kind::Ref => &mut self.refs,
+            Kind::RefList => &mut self.lists,
+            Kind::Tag { .. } => self.tags.entry(tag.unwrap_or_default().to_string()).or_default(),
+            _ => return,
+        };
+        if up {
+            *n += 1;
+        } else {
+            *n -= 1;
+        }
+    }
+
+    fn push(&mut self, kind: Kind, start: usize, inner: (usize, usize), pipe: Option<usize>, tag: Option<String>) {
+        let k = self.items.len();
+        self.items.push(Item { kind, start, end: start, closed: false, next: k + 1, inner, pipe, ns: None, seps: Vec::new() });
+        self.count(kind, tag.as_deref(), true);
+        self.frames.push(Frame { item: k, seps: self.seps.len(), heads: self.heads.len(), tag });
+    }
+
+    /// An element found whole: a self-closing tag, a link without a label, a skipped region.
+    fn complete(&mut self, kind: Kind, start: usize, end: usize, inner: (usize, usize)) {
+        let k = self.items.len();
+        self.items.push(Item { kind, start, end, closed: true, next: k + 1, inner, pipe: None, ns: None, seps: Vec::new() });
+    }
+
+    /// The innermost open element never closes: no component; what it met is its parent's.
+    fn drop_top(&mut self) {
+        let f = self.frames.pop().expect("an open element");
+        self.count(self.items[f.item].kind, f.tag.as_deref(), false);
+    }
+
+    /// The innermost open element closes at `end`; its closing tag (or `]`, `}}`) starts at `close`.
+    fn close_top(&mut self, end: usize, close: usize) {
+        let f = self.frames.pop().expect("an open element");
+        let next = self.items.len();
+        let kind = self.items[f.item].kind;
+        self.count(kind, f.tag.as_deref(), false);
+        let it = &mut self.items[f.item];
+        (it.closed, it.end, it.next) = (true, end, next);
+        match kind {
+            Kind::Template => it.seps = self.seps.split_off(f.seps),
+            Kind::Ref | Kind::RefList | Kind::Tag { .. } => {
+                it.inner.1 = close;
+                self.seps.truncate(f.seps);
+            }
+            _ => self.seps.truncate(f.seps),
+        }
+        self.heads.truncate(f.heads);
+    }
+
+    fn run(&mut self) {
+        let n = self.b.len();
+        let (mut i, mut line_start) = (0, true);
+        while i < n {
+            self.tick(1);
+            if line_start {
+                line_start = false;
+                if self.b[i] == b'=' && !self.full() {
+                    i = self.open_heading(i);
+                    continue;
+                }
+            }
+            let c = self.b[i];
+            i = match c {
+                b'\n' => {
+                    // An external link ends on its line or is none.
+                    while self.ghosts.is_empty() && self.top() == Some(Kind::ExtLink) {
+                        self.drop_top();
+                    }
+                    if self.ghosts.is_empty() && matches!(self.top(), Some(Kind::Heading { .. })) {
+                        self.close_heading(i);
+                    }
+                    line_start = true;
+                    i + 1
+                }
+                b'{' if self.at(i + 1) == b'{' => self.open_braces(i),
+                b'}' if self.at(i + 1) == b'}' => self.close_braces(i),
+                b'[' if self.at(i + 1) == b'[' => self.open_link(i),
+                b'[' => {
+                    if !self.full() && self.settings.starts_with_protocol(&self.text[i + 1..]) {
+                        self.push(Kind::ExtLink, i, (i, i), None, None);
+                    }
+                    i + 1
+                }
+                b']' => self.close_bracket(i),
+                b'|' | b'=' | b':' => {
+                    if !self.frames.is_empty() && self.ghosts.is_empty() {
+                        self.seps.push((i, c));
+                    }
+                    i + 1
+                }
+                b'<' => self.tag(i),
+                _ => i + 1,
+            };
+        }
+        self.ghosts_drop();
+        while let Some(top) = self.top() {
+            match top {
+                Kind::Heading { .. } => self.close_heading(n),
+                _ => self.drop_top(),
+            }
+        }
+    }
+
+    /// A line starting at `i` with `=` opens a heading, as the parser opens one: its content starts after the
+    /// `=`s (at most six) and the whitespace after them, newlines included. Returns where scanning goes on.
+    fn open_heading(&mut self, i: usize) -> usize {
+        let b = self.b;
+        let mut level = 1;
+        while level < 6 && b.get(i + level) == Some(&b'=') {
+            level += 1;
+        }
+        // Inside another element the `=`s are that element's separators, as the parser reads no heading there.
+        let enclosed = !self.frames.is_empty();
+        self.push(Kind::Heading { level }, i, (i, i), None, None);
+        if enclosed {
+            self.seps.extend((i..i + level).map(|k| (k, b'=')));
+        }
+        skip_ws_forwards(b, i + level)
+    }
+
+    /// The open heading on top meets the newline at `pos` (or the end of the text): it is a heading when its
+    /// line ends with `=`, at the parser's level; otherwise its text is text.
+    fn close_heading(&mut self, pos: usize) {
+        let b = self.b;
+        let f = self.frames.pop().expect("an open heading");
+        let (start, Kind::Heading { level: start_level }) = (self.items[f.item].start, self.items[f.item].kind) else {
+            unreachable!("the top is a heading")
+        };
+        let mut end = pos;
+        while end > start && matches!(b[end - 1], b' ' | b'\t') {
+            end -= 1;
+        }
+        if end < start + 3 || b[end - 1] != b'=' {
+            return;
+        }
+        // A heading met inside it, in an element that never closed, would overlap it: the parser ends this
+        // heading first, at a newline the scan has passed. Rare; neither counts then.
+        if self.heads.len() > f.heads {
+            self.heads.truncate(f.heads);
+            return;
+        }
+        let mut level = 1;
+        while level < start_level && end - level > start + level + 2 && b[end - level - 1] == b'=' {
+            level += 1;
+        }
+        self.heads.push(Head { start, end, level });
+    }
+
+    fn open_braces(&mut self, i: usize) -> usize {
+        if self.full() {
+            self.ghost_open(Ghost::Braces);
+            return i + 2;
+        }
+        if self.at(i + 2) == b'{' {
+            self.push(Kind::Param, i, (i, i), None, None);
+            return i + 3;
+        }
+        self.push(Kind::Template, i, (i, i), None, None);
+        i + 2
+    }
+
+    fn close_braces(&mut self, i: usize) -> usize {
+        if self.ghost_braces > 0 {
+            self.ghost_close(None);
+            return i + 2;
+        }
+        if self.braces == 0 {
+            return i + 2;
+        }
+        self.ghosts_drop();
+        while !matches!(self.top(), Some(Kind::Template | Kind::Param)) {
+            self.drop_top();
+        }
+        let item = self.frames.last().expect("a template or parameter").item;
+        if self.items[item].kind == Kind::Param {
+            if self.at(i + 2) == b'}' {
+                self.close_top(i + 3, i);
+                return i + 3;
+            }
+            // `{{{x}}`: the parser rewinds the parameter and reads a template from its second brace.
+            let it = &mut self.items[item];
+            (it.kind, it.start) = (Kind::Template, it.start + 1);
+        }
+        self.close_top(i + 2, i);
+        i + 2
+    }
+
+    fn open_link(&mut self, i: usize) -> usize {
+        // A link opening in the label of a link that is no file's: the parser reads the outer one as text.
+        if let Some(f) = self.frames.last().filter(|_| self.ghosts.is_empty()) {
+            let it = &self.items[f.item];
+            if it.kind == Kind::Link && it.ns != Some(6) {
+                self.drop_top();
+            }
+        }
+        if self.full() {
+            return i + 2;
+        }
+        let b = self.b;
+        let t = skip_ws_forwards(b, i + 2);
+        let mut j = t;
+        loop {
+            self.tick(1);
+            match b.get(j) {
+                None | Some(b'\n' | b'[' | b'{' | b'}') => return i + 1,
+                Some(b']') if self.at(j + 1) == b']' => {
+                    self.complete(Kind::Link, i, j + 2, (t, j));
+                    self.set_link_namespace();
+                    return j + 2;
+                }
+                Some(b']') => return i + 1,
+                Some(b'|') => {
+                    self.push(Kind::Link, i, (t, j), Some(j), None);
+                    self.set_link_namespace();
+                    self.seps.push((j, b'|'));
+                    return j + 1;
+                }
+                _ => j += 1,
+            }
+        }
+    }
+
+    fn close_bracket(&mut self, i: usize) -> usize {
+        if self.ghosts.is_empty() {
+            match self.top() {
+                Some(Kind::ExtLink) => {
+                    self.close_top(i + 1, i);
+                    return i + 1;
+                }
+                Some(Kind::Link) if self.at(i + 1) == b']' => {
+                    self.close_top(i + 2, i);
+                    return i + 2;
+                }
+                _ => {}
+            }
+        }
+        i + 1
+    }
+
+    /// The first closing tag named `name` at or after `from`: its start and end. `from` never decreases
+    /// between questions about one name.
+    fn closer_of(&mut self, name: &str, from: usize) -> Option<(usize, usize)> {
+        loop {
+            if let Some((list, cursor)) = self.closers.by_name.get_mut(name) {
+                while *cursor < list.len() && list[*cursor].0 < from {
+                    *cursor += 1;
+                    self.work.set(self.work.get() + 1);
+                }
+                if let Some(&c) = list.get(*cursor) {
+                    return Some(c);
+                }
+            }
+            // Read on to the next closing tag of any name; past the last one, every answer is `None`.
+            let at = self.closers.scanned.max(from);
+            let Some(p) = find(self.b, at, b"</") else {
+                self.tick(self.b.len().saturating_sub(at));
+                self.closers.scanned = self.b.len();
+                return None;
+            };
+            self.tick(p + 2 - at);
+            self.closers.scanned = p + 2;
+            if let Some((n, end)) = self.plain_closer(p) {
+                self.closers.by_name.entry(n).or_default().0.push((p, end));
+            }
+        }
+    }
+
+    /// The closing tag of a skipped region `name` whose open tag ends at `from`: its start and end. `None` when
+    /// the text ends first, or when the closing tag of an open element comes first, as the parser lets a
+    /// plain-text tag be closed by nothing else and then reads its open tag as text.
+    fn region_end(&mut self, name: &str, from: usize) -> Option<(usize, usize)> {
+        let own = self.closer_of(name, from)?;
+        let mut open: Vec<String> = Vec::new();
+        if self.open_tags > 0 {
+            open.extend(["ref", "references"].into_iter().filter(|n| self.is_open(n)).map(String::from));
+            open.extend(self.tags.iter().filter(|(_, &c)| c > 0).map(|(n, _)| n.clone()));
+            open.extend(self.ghost_tags.iter().filter(|(_, &c)| c > 0).map(|(n, _)| n.clone()));
+        }
+        self.tick(open.len());
+        for n in open {
+            if self.closer_of(&n, from).is_some_and(|(p, _)| p < own.0) {
+                return None;
+            }
+        }
+        Some(own)
+    }
+
+    /// Where the comment opening at `i` ends: after its `-->`; at the closing tag of an open element in it,
+    /// which the parser lets close the element; or at the end of the text. One scan, which consumes it.
+    fn comment_end(&self, i: usize) -> usize {
+        let b = self.b;
+        let mut k = i + 4;
+        while k < b.len() {
+            self.tick(1);
+            match b[k] {
+                b'-' if b[k..].starts_with(b"-->") => return k + 3,
+                b'<' if self.open_tags > 0 && self.at(k + 1) == b'/' => match self.plain_closer(k) {
+                    Some((name, _)) if self.is_open(&name) => return k,
+                    _ => k += 2,
+                },
+                _ => k += 1,
+            }
+        }
+        b.len()
+    }
+
+    /// The closing tag at `k` (`</name>`, whitespace allowed before `>`) as the parser reads one inside a
+    /// comment or a plain-text tag: its lowercased name and its end.
+    fn plain_closer(&self, k: usize) -> Option<(String, usize)> {
+        let b = self.b;
+        let ns = k + 2;
+        let mut j = ns;
+        loop {
+            self.tick(1);
+            match b.get(j) {
+                None | Some(b'/' | b'<') => return None,
+                Some(b'\t' | b'\n' | b' ') => {
+                    let q = skip_ws_forwards(b, j + 1);
+                    self.tick(q - j);
+                    return (b.get(q) == Some(&b'>')).then(|| (self.text[ns..j].to_ascii_lowercase(), q + 1));
+                }
+                Some(b'>') => return Some((self.text[ns..j].to_ascii_lowercase(), j + 1)),
+                _ if j - ns >= MAX_TAG_NAME => return None,
+                _ => j += 1,
+            }
+        }
+    }
+
+    /// An open ref, ref list or tag of this name, a ghost one included.
+    fn is_open(&self, name: &str) -> bool {
+        let real = match name {
+            "ref" => self.refs > 0,
+            "references" => self.lists > 0,
+            _ => self.tags.get(name).is_some_and(|&n| n > 0),
+        };
+        real || self.ghost_tags.get(name).is_some_and(|&n| n > 0)
+    }
+
+    /// The first `>` at or after `from`, from the cache when it can answer.
+    fn next_gt(&mut self, from: usize) -> Option<usize> {
+        if let Some((searched_from, found)) = self.gt {
+            if from >= searched_from && found.is_none_or(|p| p >= from) {
+                return found;
+            }
+        }
+        let found = self.b.get(from..)?.iter().position(|&c| c == b'>').map(|p| from + p);
+        self.tick(found.unwrap_or(self.b.len()) - from);
+        self.gt = Some((from, found));
+        found
+    }
+
+    fn tag(&mut self, i: usize) -> usize {
+        let b = self.b;
+        if b[i..].starts_with(b"<!--") {
+            let end = self.comment_end(i);
+            self.complete(Kind::Mute, i, end, (end, end));
+            return end;
+        }
+        let closing = self.at(i + 1) == b'/';
+        let ns = i + 1 + usize::from(closing);
+        let mut j = ns;
+        while j < b.len() && !matches!(b[j], b'\t' | b'\n' | b' ' | b'/' | b'>') {
+            self.tick(1);
+            if j - ns >= MAX_TAG_NAME {
+                return i + 1;
+            }
+            j += 1;
+        }
+        let name = self.text[ns..j].to_ascii_lowercase();
+        if closing {
+            return self.end_tag(i, j, &name);
+        }
+        let Some(class) = self.settings.tag_class(&name) else { return i + 1 };
+        // The open tag ends at its first `>`, as the parser ends it; an extension tag's is no tag when a `<`
+        // comes first.
+        let gt = match class {
+            TagClass::Html => self.next_gt(j),
+            TagClass::Extension => {
+                let stop = b[j..].iter().position(|&c| c == b'>' || c == b'<').map(|p| j + p);
+                self.tick(stop.unwrap_or(b.len()) - j);
+                stop.filter(|&p| b[p] == b'>')
+            }
+        };
+        let Some(gt) = gt else { return i + 1 };
+        let open_end = gt + 1;
+        let self_closing = b[gt - 1] == b'/';
+        // `<pre>` is a skipped region (R54), although the parser reads it as an HTML tag.
+        let region = match (class, name.as_str()) {
+            (_, "pre") | (TagClass::Extension, "nowiki" | "math") => !self_closing,
+            _ => false,
+        };
+        if region {
+            if let Some((close, end)) = self.region_end(&name, open_end) {
+                let kind = if name == "math" { Kind::Mute } else { Kind::Raw };
+                self.complete(kind, i, end, (open_end, close));
+                return end;
+            }
+            if class == TagClass::Extension {
+                return i + 1;
+            }
+        }
+        if class == TagClass::Html {
+            self.complete(Kind::Html, i, open_end, (ns, j));
+            return open_end;
+        }
+        match name.as_str() {
+            _ if self.full() => {
+                // Past the depth cap a tag opens no element, but it pairs with its own closing tag (R56).
+                self.complete(Kind::Mute, i, open_end, (open_end, open_end));
+                if !self_closing {
+                    self.ghost_open(Ghost::Tag(name));
+                }
+            }
+            "ref" | "references" => {
+                let kind = if name == "ref" { Kind::Ref } else { Kind::RefList };
+                match self_closing {
+                    true => self.complete(kind, i, open_end, (open_end, open_end)),
+                    false => self.push(kind, i, (open_end, open_end), None, None),
+                }
+            }
+            _ if self_closing => self.complete(Kind::Mute, i, open_end, (open_end, open_end)),
+            _ => {
+                let muted = EXCLUDED_TAGS.contains(&name.as_str());
+                self.push(Kind::Tag { muted }, i, (open_end, open_end), None, Some(name));
+            }
+        }
+        open_end
+    }
+
+    /// `</name`, its name ending at `j`: closes the nearest open element of that name, dropping the unclosed
+    /// ones inside it.
+    fn end_tag(&mut self, i: usize, j: usize, name: &str) -> usize {
+        match self.settings.tag_class(name) {
+            None => return i + 1,
+            Some(TagClass::Html) => {
+                // An end tag runs to its first `>`.
+                let Some(gt) = self.next_gt(j) else { return i + 1 };
+                self.complete(Kind::Html, i, gt + 1, (i + 2, j));
+                return gt + 1;
+            }
+            Some(TagClass::Extension) => {}
+        }
+        let k = skip_ws_forwards(self.b, j);
+        if self.at(k) != b'>' {
+            return i + 1;
+        }
+        let end = k + 1;
+        if self.ghost_tags.get(name).is_some_and(|&n| n > 0) {
+            self.ghost_close(Some(name));
+            self.complete(Kind::Mute, i, end, (end, end));
+            return end;
+        }
+        let open = match name {
+            "ref" => self.refs,
+            "references" => self.lists,
+            _ => self.tags.get(name).copied().unwrap_or(0),
+        };
+        if open > 0 {
+            self.ghosts_drop();
+            loop {
+                let f = self.frames.last().expect("an open element of that name");
+                let matched = match self.items[f.item].kind {
+                    Kind::Ref => name == "ref",
+                    Kind::RefList => name == "references",
+                    Kind::Tag { .. } => f.tag.as_deref() == Some(name),
+                    _ => false,
+                };
+                if matched {
+                    break;
+                }
+                self.drop_top();
+            }
+            self.close_top(end, i);
+            return end;
+        }
+        // No open element of that name: the parser reads the closing tag as text.
+        i + 1
+    }
+
+    /// A template's name and parameters, from its separators, as the parser reads them.
+    fn layout(&self, it: &Item) -> Layout {
+        let b = self.b;
+        let close = it.end - 2;
+        let mut pipes: Vec<(usize, Option<usize>)> = Vec::new();
+        let mut colon = None;
+        self.tick(it.seps.len());
+        for &(p, c) in &it.seps {
+            match c {
+                b'|' => pipes.push((p, None)),
+                b'=' => {
+                    if let Some(last) = pipes.last_mut() {
+                        last.1 = last.1.or(Some(p));
+                    }
+                }
+                _ => {
+                    if pipes.is_empty() {
+                        colon = colon.or(Some(p));
+                    }
+                }
+            }
+        }
+        let name = trim_range(self.text, it.start + 2, pipes.first().map_or(close, |p| p.0));
+        let params = pipes
+            .iter()
+            .enumerate()
+            .map(|(k, &(pipe, eq))| {
+                let next = pipes.get(k + 1).map_or(close, |q| q.0);
+                let (start, end) = (skip_ws_forwards(b, pipe + 1), skip_ws_backwards(b, next));
+                match eq {
+                    Some(q) => (
+                        Some(trim_range(self.text, start, skip_ws_backwards(b, q))),
+                        trim_range(self.text, skip_ws_forwards(b, q + 1), end),
+                        (start, end),
+                    ),
+                    None => (None, trim_range(self.text, start, end), (start, end)),
+                }
+            })
+            .collect();
+        Layout { name, colon, params }
+    }
+
+    /// The link just added gets its namespace: its target's prefix, when it has no leading colon.
+    fn set_link_namespace(&mut self) {
+        let it = self.items.last().expect("a link");
+        let target = self.text[it.inner.0..it.inner.1].trim();
+        let ns = match target.split_once(':') {
+            Some((prefix, _)) if !target.starts_with(':') => self.settings.namespace(prefix),
+            _ => None,
+        };
+        self.items.last_mut().expect("a link").ns = ns;
+    }
+
+    /// A link whose text the text rules remove: a file, a category, an interlanguage link; in an external
+    /// link's label (`label`), a file or a category, which the parser makes no link of.
+    fn link_muted(&self, it: &Item, label: bool) -> bool {
+        let target = self.text[it.inner.0..it.inner.1].trim();
+        matches!(it.ns, Some(6 | 14)) || (!label && walk::is_interlanguage(self.settings, target))
+    }
+
+    /// Where an external link's label starts: at the first whitespace after its URL, outside the elements in it.
+    fn label_start(&self, idx: usize) -> Option<usize> {
+        let it = &self.items[idx];
+        let (mut pos, end) = (it.start + 1, it.end - 1);
+        let mut k = idx + 1;
+        while pos < end {
+            while k < it.next && !self.items[k].closed {
+                k += 1;
+                self.tick(1);
+            }
+            let stop = if k < it.next { self.items[k].start.min(end) } else { end };
+            self.tick(1 + stop.saturating_sub(pos));
+            if let Some(w) = self.text[pos..stop].find(char::is_whitespace) {
+                return Some(pos + w);
+            }
+            if k >= it.next {
+                return None;
+            }
+            pos = self.items[k].end;
+            k = self.items[k].next;
+        }
+        None
+    }
+
+    /// The free URLs of the page (`autolink`, R73), in order: in running text, ref bodies, ref lists, the content
+    /// of tags that add text and template parameter values; not in links, external links, names, template
+    /// parameters `{{{…}}}`, comments, raw or muted regions or HTML tags, as the walk reads them.
+    fn free_urls(&self) -> Vec<FreeUrl> {
+        let mut out = Vec::new();
+        let mut cursor = autolink::Cursor::default();
+        self.free_in(0, self.text.len(), false, &mut cursor, &mut out);
+        self.tick(cursor.read as usize);
+        out
+    }
+
+    /// The free URLs of `a..b`, whose elements start at or after `a`; `in_template`: a parameter value.
+    fn free_in(&self, a: usize, b: usize, in_template: bool, cursor: &mut autolink::Cursor, out: &mut Vec<FreeUrl>) {
+        let mut k = self.items.partition_point(|it| it.start < a);
+        let mut pos = a;
+        while pos < b {
+            self.tick(1);
+            // Up to the next closed item at or after `pos`; the items from `b` on are outside the range.
+            while let Some(it) = self.items.get(k) {
+                if it.start >= b {
+                    break;
+                }
+                self.tick(1);
+                match (it.closed, it.start < pos) {
+                    (false, _) => k += 1,
+                    (true, true) => k = it.next,
+                    (true, false) => break,
+                }
+            }
+            let next = self.items.get(k).map_or(b, |it| it.start.min(b));
+            if pos < next {
+                self.tick(next - pos);
+                autolink::scan(self.text, self.settings, pos, next, in_template, cursor, out);
+            }
+            if next >= b {
+                break;
+            }
+            let it = &self.items[k];
+            match it.kind {
+                Kind::Template => {
+                    for (_, value, _) in self.layout(it).params {
+                        self.free_in(value.0, value.1, true, cursor, out);
+                    }
+                }
+                Kind::Ref | Kind::RefList | Kind::Tag { muted: false } => {
+                    self.free_in(it.inner.0, it.inner.1, false, cursor, out);
+                }
+                _ => {}
+            }
+            (pos, k) = (it.end, it.next);
+        }
+    }
+
+    /// The text of `a..b` (R53).
+    fn strip(&self, a: usize, b: usize) -> String {
+        self.strip_as(a, b, false)
+    }
+
+    /// The text of `a..b`; as an external link's label (`label`), under the walk's rules for one: the label's
+    /// own text, entities and links; tags and their content add nothing, a link without a label adds its
+    /// target.
+    fn strip_as(&self, a: usize, b: usize, label: bool) -> String {
+        let mut out = Flat::default();
+        let mut k = self.items.partition_point(|it| it.start < a);
+        let mut pos = a;
+        // Where the content of an element being read ends, and the length of its closer; innermost last.
+        let mut ends: Vec<(usize, usize)> = Vec::new();
+        while pos < b {
+            self.tick(1);
+            // Up to the next closed item at or after `pos`; the items from `b` on are outside the range.
+            while let Some(it) = self.items.get(k) {
+                if it.start >= b {
+                    break;
+                }
+                self.tick(1);
+                match (it.closed, it.start < pos) {
+                    (false, _) => k += 1,
+                    (true, true) => k = it.next,
+                    (true, false) => break,
+                }
+            }
+            let next_item = self.items.get(k).map_or(usize::MAX, |it| it.start);
+            let next_end = ends.last().map_or(usize::MAX, |e| e.0);
+            let stop = b.min(next_item).min(next_end);
+            if pos < stop {
+                self.tick(stop - pos);
+                self.plain(&mut out, pos, stop);
+                pos = stop;
+            }
+            if pos >= b {
+                break;
+            }
+            if pos == next_end {
+                pos += ends.pop().expect("an open element").1;
+                continue;
+            }
+            let it = &self.items[k];
+            match it.kind {
+                Kind::Raw if !label => {
+                    self.tick(it.inner.1 - it.inner.0);
+                    out.push(&self.text[it.inner.0..it.inner.1]);
+                    (pos, k) = (it.end, it.next);
+                }
+                Kind::Tag { muted: false } if !label => {
+                    ends.push((it.inner.1, it.end - it.inner.1));
+                    (pos, k) = (it.inner.0, k + 1);
+                }
+                Kind::Link => match (self.link_muted(it, label), it.pipe) {
+                    (false, Some(p)) => {
+                        ends.push((it.end - 2, 2));
+                        (pos, k) = (p + 1, k + 1);
+                    }
+                    (false, None) => {
+                        let target = &self.text[it.inner.0..it.inner.1];
+                        out.push(if label { target } else { walk::link_title(self.settings, target) });
+                        (pos, k) = (it.end, it.next);
+                    }
+                    (true, _) => (pos, k) = (it.end, it.next),
+                },
+                Kind::Html => {
+                    if !label && self.text[it.inner.0..it.inner.1].eq_ignore_ascii_case("br") {
+                        out.push(" ");
+                    }
+                    (pos, k) = (it.end, it.next);
+                }
+                // In a label, an external link adds nothing, as `label_of` skips one.
+                Kind::ExtLink if !label => match self.label_start(k) {
+                    Some(l) => {
+                        ends.push((it.end - 1, 1));
+                        (pos, k) = (l, k + 1);
+                    }
+                    None => (pos, k) = (it.end, it.next),
+                },
+                _ => (pos, k) = (it.end, it.next),
+            }
+        }
+        out.into_text()
+    }
+
+    /// A named character entity at `i` (`&nbsp;`), before `to`, as the parser decodes it: the character and
+    /// the entity's end. The parser's entity table is its own, so each name is asked of the parser once.
+    fn entity(&self, i: usize, to: usize) -> Option<(char, usize)> {
+        let b = self.b;
+        let semi = (i + 1..to.min(i + 2 + MAX_ENTITY_NAME)).find(|&k| !b[k].is_ascii_alphanumeric())?;
+        if b[semi] != b';' || semi == i + 1 {
+            return None;
+        }
+        let name = &self.text[i..=semi];
+        let mut cache = self.entities.borrow_mut();
+        let c = *cache.entry(name.to_string()).or_insert_with(|| {
+            match frontend::parse(name, self.settings.configuration(), 0).ok()?.output.nodes.as_slice() {
+                [Node::CharacterEntity { character, .. }] => Some(*character),
+                _ => None,
+            }
+        });
+        c.map(|c| (c, semi + 1))
+    }
+
+    /// A magic word at `i` (`__TOC__`), before `to`, as the parser reads one: its end.
+    fn magic_word(&self, i: usize, to: usize) -> Option<usize> {
+        let end = find(&self.b[..to.min(i + 4 + MAX_MAGIC_WORD)], i + 2, b"__")? + 2;
+        let word = &self.text[i..end];
+        let mut cache = self.magic_words.borrow_mut();
+        let known = *cache.entry(word.to_string()).or_insert_with(|| {
+            frontend::parse(word, self.settings.configuration(), 0)
+                .is_ok_and(|p| matches!(p.output.nodes.as_slice(), [Node::MagicWord { .. }]))
+        });
+        known.then_some(end)
+    }
+
+    /// Text outside elements: bold and italic markers and magic words removed, character entities decoded.
+    fn plain(&self, out: &mut Flat, from: usize, to: usize) {
+        let b = self.b;
+        let (mut run, mut i) = (from, from);
+        while i < to {
+            match b[i] {
+                b'\'' if i + 1 < to && b[i + 1] == b'\'' => {
+                    let mut j = i;
+                    while j < to && b[j] == b'\'' {
+                        j += 1;
+                    }
+                    out.push(&self.text[run..i]);
+                    // `''''` is an apostrophe and bold; past five, the extra apostrophes stay.
+                    let keep = match j - i {
+                        2 | 3 | 5 => 0,
+                        4 => 1,
+                        n => n - 5,
+                    };
+                    out.push(&self.text[i..i + keep]);
+                    (i, run) = (j, j);
+                }
+                b'_' if i + 1 < to && b[i + 1] == b'_' => match self.magic_word(i, to) {
+                    Some(end) => {
+                        out.push(&self.text[run..i]);
+                        (i, run) = (end, end);
+                    }
+                    None => i += 1,
+                },
+                b'&' => match self.entity(i, to) {
+                    Some((c, end)) => {
+                        out.push(&self.text[run..i]);
+                        out.push(c.encode_utf8(&mut [0; 4]));
+                        (i, run) = (end, end);
+                    }
+                    None => i += 1,
+                },
+                _ => i += 1,
+            }
+        }
+        out.push(&self.text[run..to]);
+    }
+
+    /// The events of what the pass found, in document order, into the walk's builders.
+    /// Also returns the work of the whole scan (`scan_work`).
+    fn emit(self, chars: &CharIndex, registry: &Registry) -> (Components, u64) {
+        struct Open {
+            item: usize,
+            end: usize,
+            /// The paragraph slot whose body the component and what it contains are in.
+            slot: usize,
+            params: Vec<(Option<(usize, usize)>, (usize, usize), (usize, usize))>,
+        }
+        let mut collect = Collect::new(self.text, chars, self.settings, registry);
+        let mut open: Vec<Open> = Vec::new();
+        let (mut k, mut h, mut f) = (0, 0, 0);
+        let mut paras = Paras::default();
+        let free = self.free_urls();
+        loop {
+            self.tick(1);
+            let head = self.heads.get(h).map(|x| x.start);
+            let item = self.items.get(k).map(|x| x.start);
+            let url = free.get(f).map(|u| u.start);
+            let pos = [head, item, url].into_iter().flatten().min().unwrap_or(usize::MAX);
+            while open.last().is_some_and(|o| o.end <= pos) {
+                let o = open.pop().expect("checked");
+                let it = &self.items[o.item];
+                match it.kind {
+                    Kind::Template => {
+                        for (name, value, span) in o.params {
+                            let value_text = self.strip(value.0, value.1);
+                            collect.template_param(ParamEvent { name, value, span, value_text });
+                        }
+                        collect.template_close();
+                    }
+                    Kind::Ref => collect.ref_close(self.strip(it.inner.0, it.inner.1)),
+                    _ => collect.ref_list_close(),
+                }
+            }
+            if pos == usize::MAX {
+                break;
+            }
+            if url == Some(pos) {
+                // A free URL is a row only in a ref's body, so only inside a component (the collector decides).
+                let u = &free[f];
+                f += 1;
+                if let Some(o) = open.first() {
+                    let place = Place { section_id: collect.section(), para: Some((o.slot, 0)) };
+                    collect.free_url((u.start, u.end), &u.url, place);
+                }
+                continue;
+            }
+            if head == Some(pos) {
+                let Head { start, end, level } = self.heads[h];
+                let (a, b) = (start + level, end - level);
+                let id = collect.heading(level as u8, (start, end), self.text[a..b].trim());
+                collect.heading_title(id, self.strip(a, b));
+                h += 1;
+                continue;
+            }
+            let it = &self.items[k];
+            k += 1;
+            if !it.closed || !matches!(it.kind, Kind::Template | Kind::Ref | Kind::RefList | Kind::ExtLink) {
+                continue;
+            }
+            if open.is_empty() {
+                paras.advance(self.b, it.start);
+            }
+            let slot = open.first().map_or(paras.slot, |o| o.slot);
+            let place = Place { section_id: collect.section(), para: Some((slot, 0)) };
+            let span = (it.start, it.end);
+            match it.kind {
+                Kind::Template => {
+                    let Layout { name, colon, params } = self.layout(it);
+                    collect.template_open(name, colon, span, place);
+                    if let Some(from) = collect.split_from() {
+                        collect.template_split_text(self.strip(from, name.1));
+                    }
+                    open.push(Open { item: k - 1, end: it.end, slot, params });
+                }
+                Kind::Ref | Kind::RefList => {
+                    match it.kind {
+                        Kind::Ref => collect.ref_open(span, place),
+                        _ => collect.ref_list_open(span, place),
+                    }
+                    open.push(Open { item: k - 1, end: it.end, slot, params: Vec::new() });
+                }
+                _ => {
+                    // The label is read only when the citations collector keeps it (a link in a ref's body).
+                    let label = || {
+                        self.label_start(k - 1).map(|l| self.strip_as(l, it.end - 1, true)).filter(|l| !l.is_empty())
+                    };
+                    collect.external_link(span, label, place);
+                }
+            }
+            if open.len() <= 1 {
+                // What a top-level component spans is no running text.
+                paras.counted = paras.counted.max(it.end);
+            }
+        }
+        (collect.finish(|_| (None, None)), self.work.get())
+    }
+}

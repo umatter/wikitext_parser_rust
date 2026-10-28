@@ -1,0 +1,679 @@
+# Template registry. One [[template]] per entry.
+#   name, aliases   written without a namespace prefix (Load rejects any ':'); normalised by the rule
+#                   "_" as a space, whitespace collapsed, first letter lowercased
+#   role            infobox | citation | footnote | ref_list | link_status | inline_text | interlanguage
+#                   | navigation | maintenance | other
+#   family          citation kind (web, news, book, journal, encyclopedia, other_template) or note kind
+#   archive_wrapper true for a template that only wraps an archive link ({{webarchive}}, {{wayback}})
+#   site            "wikipedia" or "ruwiki" to limit the entry to one site; absent means both
+#   default_group   footnote and ref_list entries only: the group the template uses when it has no group=
+#                   parameter (absent means the default group ""). Set only where the corpora show it.
+#   [template.fields]  canonical key -> parameter names, in order of preference. Names match
+#                   ParamRow.name exactly: case-sensitive after trimming, so list each case variant needed.
+#                   Positional parameters are named "1", "2", ...
+#                   A scalar field takes the first listed parameter that is present and non-empty.
+#                   The list fields (authors, harv_names) are read by the citation and sfn code: authors
+#                   collects every present one, in order, with lastN + firstN combined.
+#                   url_status: the CS1 dead-link parameters, read as a scalar field. The citation's dead_link
+#                   is true when its value, trimmed and lowercased, is "dead", or, for a parameter whose name has
+#                   no "status" (deadlink, deadurl), one of yes, y, true, да. The names are those the corpora use
+#                   on CS1 templates: url-status, deadlink, deadurl (public: 861, 1952 and 29 parameters;
+#                   private Ruwiki: 0, 1119 and 3). dead-url and Russian equivalents occur in neither.
+# Parameter names come from the public corpus (tests/corpus/wikipedia_v1.parquet) and from the
+# documented parameters of the templates.
+
+[[template]]
+name = "cite web"
+aliases = ["citeweb"]
+role = "citation"
+family = "web"
+[template.fields]
+url = ["url"]
+archive_url = ["archive-url", "archiveurl", "archive_url"]
+archive_date_raw = ["archive-date", "archivedate", "archive_date"]
+title = ["title", "trans-title"]
+authors = ["author", "last", "first", "last1", "first1", "last2", "first2", "authors", "coauthors"]
+harv_names = ["last1", "last2", "last3", "last4"]
+harv_ref = ["ref"]
+date_raw = ["date", "datepublished"]
+year = ["year"]
+publisher = ["publisher"]
+work = ["website", "work", "newspaper", "journal", "magazine"]
+language = ["language", "lang"]
+isbn = ["isbn"]
+doi = ["doi"]
+access_date_raw = ["access-date", "accessdate"]
+url_status = ["url-status", "deadlink", "deadurl"]
+
+[[template]]
+name = "cite news"
+aliases = ["cite magazine", "cite press release"]
+role = "citation"
+family = "news"
+[template.fields]
+url = ["url"]
+archive_url = ["archive-url", "archiveurl", "archive_url"]
+archive_date_raw = ["archive-date", "archivedate", "archive_date"]
+title = ["title", "trans-title"]
+authors = ["author", "last", "first", "last1", "first1", "last2", "first2", "authors", "coauthors"]
+harv_names = ["last1", "last2", "last3", "last4"]
+harv_ref = ["ref"]
+date_raw = ["date", "datepublished"]
+year = ["year"]
+publisher = ["publisher"]
+work = ["work", "newspaper", "website", "magazine", "agency"]
+language = ["language", "lang"]
+isbn = ["isbn"]
+doi = ["doi"]
+access_date_raw = ["access-date", "accessdate"]
+url_status = ["url-status", "deadlink", "deadurl"]
+
+[[template]]
+name = "cite book"
+aliases = []
+role = "citation"
+family = "book"
+[template.fields]
+url = ["url"]
+archive_url = ["archive-url", "archiveurl", "archive_url"]
+archive_date_raw = ["archive-date", "archivedate", "archive_date"]
+title = ["title", "trans-title"]
+authors = ["author", "last", "first", "last1", "first1", "last2", "first2", "authors", "coauthors"]
+harv_names = ["last1", "last2", "last3", "last4"]
+harv_ref = ["ref"]
+date_raw = ["date", "datepublished"]
+year = ["year"]
+publisher = ["publisher"]
+work = ["series"]
+language = ["language", "lang"]
+isbn = ["isbn"]
+doi = ["doi"]
+access_date_raw = ["access-date", "accessdate"]
+url_status = ["url-status", "deadlink", "deadurl"]
+
+[[template]]
+name = "cite journal"
+aliases = []
+role = "citation"
+family = "journal"
+[template.fields]
+url = ["url"]
+archive_url = ["archive-url", "archiveurl", "archive_url"]
+archive_date_raw = ["archive-date", "archivedate", "archive_date"]
+title = ["title", "trans-title"]
+authors = ["author", "last", "first", "last1", "first1", "last2", "first2", "authors", "coauthors"]
+harv_names = ["last1", "last2", "last3", "last4"]
+harv_ref = ["ref"]
+date_raw = ["date", "datepublished"]
+year = ["year"]
+publisher = ["publisher"]
+work = ["journal", "work"]
+language = ["language", "lang"]
+isbn = ["isbn"]
+doi = ["doi"]
+access_date_raw = ["access-date", "accessdate"]
+url_status = ["url-status", "deadlink", "deadurl"]
+
+[[template]]
+name = "cite encyclopedia"
+aliases = []
+role = "citation"
+family = "encyclopedia"
+[template.fields]
+url = ["url"]
+archive_url = ["archive-url", "archiveurl", "archive_url"]
+archive_date_raw = ["archive-date", "archivedate", "archive_date"]
+title = ["title", "article", "entry"]
+authors = ["author", "last", "first", "last1", "first1", "last2", "first2", "authors", "coauthors"]
+harv_names = ["last1", "last2", "last3", "last4"]
+harv_ref = ["ref"]
+date_raw = ["date", "datepublished"]
+year = ["year"]
+publisher = ["publisher"]
+work = ["encyclopedia", "work"]
+language = ["language", "lang"]
+isbn = ["isbn"]
+doi = ["doi"]
+access_date_raw = ["access-date", "accessdate"]
+url_status = ["url-status", "deadlink", "deadurl"]
+
+# CS1 forms the registry lacked (cite conference, cite report, cite thesis). None occurs in the public or the
+# private corpus; the parameters are the templates' documented ones. None of the three is a web page, news,
+# book, journal or encyclopedia entry as the other families mean them, so each is other_template.
+[[template]]
+name = "cite conference"
+aliases = []
+role = "citation"
+family = "other_template"
+[template.fields]
+url = ["url"]
+archive_url = ["archive-url", "archiveurl"]
+archive_date_raw = ["archive-date", "archivedate"]
+title = ["title", "trans-title"]
+authors = ["author", "last", "first", "last1", "first1", "last2", "first2", "authors"]
+harv_names = ["last1", "last2", "last3", "last4"]
+harv_ref = ["ref"]
+date_raw = ["date"]
+year = ["year"]
+publisher = ["publisher"]
+work = ["book-title", "conference"]
+language = ["language", "lang"]
+isbn = ["isbn"]
+doi = ["doi"]
+access_date_raw = ["access-date", "accessdate"]
+url_status = ["url-status", "deadlink", "deadurl"]
+
+[[template]]
+name = "cite report"
+aliases = []
+role = "citation"
+family = "other_template"
+[template.fields]
+url = ["url"]
+archive_url = ["archive-url", "archiveurl"]
+archive_date_raw = ["archive-date", "archivedate"]
+title = ["title", "trans-title"]
+authors = ["author", "last", "first", "last1", "first1", "last2", "first2", "authors"]
+harv_names = ["last1", "last2", "last3", "last4"]
+harv_ref = ["ref"]
+date_raw = ["date"]
+year = ["year"]
+publisher = ["publisher"]
+work = ["work", "series"]
+language = ["language", "lang"]
+isbn = ["isbn"]
+doi = ["doi"]
+access_date_raw = ["access-date", "accessdate"]
+url_status = ["url-status", "deadlink", "deadurl"]
+
+[[template]]
+name = "cite thesis"
+aliases = []
+role = "citation"
+family = "other_template"
+[template.fields]
+url = ["url"]
+archive_url = ["archive-url", "archiveurl"]
+archive_date_raw = ["archive-date", "archivedate"]
+title = ["title", "trans-title"]
+authors = ["author", "last", "first", "last1", "first1", "last2", "first2", "authors"]
+harv_names = ["last1", "last2", "last3", "last4"]
+harv_ref = ["ref"]
+date_raw = ["date"]
+year = ["year"]
+publisher = ["publisher", "institution", "school"]
+language = ["language", "lang"]
+isbn = ["isbn"]
+doi = ["doi"]
+access_date_raw = ["access-date", "accessdate"]
+url_status = ["url-status", "deadlink", "deadurl"]
+
+[[template]]
+name = "книга"
+aliases = []
+role = "citation"
+family = "book"
+[template.fields]
+url = ["ссылка", "url"]
+archive_url = ["archive-url", "archiveurl", "архив"]
+archive_date_raw = ["archive-date", "archivedate", "архив дата"]
+title = ["заглавие", "название"]
+authors = ["автор"]
+harv_ref = ["ref"]
+year = ["год"]
+publisher = ["издательство"]
+language = ["язык", "lang"]
+isbn = ["isbn", "ISBN"]
+doi = ["doi"]
+access_date_raw = ["access-date", "accessdate", "дата обращения"]
+date_raw = ["дата"]
+
+[[template]]
+name = "статья"
+aliases = []
+role = "citation"
+family = "journal"
+[template.fields]
+url = ["ссылка", "url"]
+archive_url = ["archive-url", "archiveurl", "архив"]
+archive_date_raw = ["archive-date", "archivedate", "архив дата"]
+title = ["заглавие", "название"]
+authors = ["автор"]
+harv_ref = ["ref"]
+year = ["год"]
+publisher = ["издательство"]
+language = ["язык", "lang"]
+isbn = ["isbn", "ISBN"]
+doi = ["doi"]
+access_date_raw = ["access-date", "accessdate", "дата обращения"]
+work = ["издание"]
+
+[[template]]
+name = "публикация"
+aliases = []
+role = "citation"
+family = "other_template"
+[template.fields]
+url = ["ссылка", "url"]
+archive_url = ["archive-url", "archiveurl", "архив"]
+archive_date_raw = ["archive-date", "archivedate", "архив дата"]
+title = ["заглавие", "название"]
+authors = ["автор"]
+harv_ref = ["ref"]
+year = ["год"]
+publisher = ["издательство"]
+language = ["язык", "lang"]
+isbn = ["isbn", "ISBN"]
+doi = ["doi"]
+access_date_raw = ["access-date", "accessdate", "дата обращения"]
+work = ["издание"]
+
+[[template]]
+name = "webarchive"
+aliases = []
+role = "citation"
+family = "web"
+archive_wrapper = true
+[template.fields]
+archive_url = ["url"]
+archive_date_raw = ["date"]
+
+[[template]]
+name = "wayback"
+aliases = []
+role = "citation"
+family = "web"
+archive_wrapper = true
+[template.fields]
+archive_url = ["url"]
+archive_date_raw = ["date"]
+
+[[template]]
+name = "sfn"
+aliases = ["sfnp"]
+role = "footnote"
+family = "short"
+[template.fields]
+harv_names = ["1", "2", "3", "4"]
+harv_ref = ["ref"]
+
+[[template]]
+name = "efn"
+aliases = []
+role = "footnote"
+family = "explanatory"
+# The public corpus: every page version with {{efn}} (3) also has {{комментарии}} and renders its plain refs
+# with a separate {{примечания}}; on one (page 215633) a {{efn|group="К"}} note and default {{efn}} notes
+# share that one {{комментарии}} list, which makes them group К (see комментарии).
+default_group = "К"
+
+[[template]]
+name = "комментарий"
+aliases = []
+role = "footnote"
+family = "explanatory"
+
+[[template]]
+name = "примечания"
+aliases = []
+role = "ref_list"
+family = "notes"
+
+[[template]]
+name = "reflist"
+aliases = []
+role = "ref_list"
+family = "notes"
+
+[[template]]
+name = "список примечаний"
+aliases = []
+role = "ref_list"
+family = "notes"
+
+[[template]]
+name = "notelist"
+aliases = []
+role = "ref_list"
+family = "comments"
+
+[[template]]
+name = "комментарии"
+aliases = []
+role = "ref_list"
+family = "comments"
+# The public corpus, page 215633: a note in group К ({{efn|group="К"}}) and no list with group=К besides
+# {{комментарии}} (the other list, {{Примечания}}, renders the plain refs).
+default_group = "К"
+
+[[template]]
+name = "недоступная ссылка"
+aliases = []
+role = "link_status"
+
+[[template]]
+name = "dead link"
+aliases = []
+role = "link_status"
+
+# ---------------------------------------------------------------------------------------------------------
+# Added by Task 15 from the templates found inside refs on the public corpus and the private (Ruwiki)
+# corpus; every name occurs in the corpora. None is limited to a site. An alias shares its entry because the
+# corpus uses it the same way (same parameters, same place in the ref); otherwise a name has its own entry.
+# Templates that identify a source are citations; those that only format text inside a ref are `other`.
+
+[[template]]
+name = "cite web 2"
+aliases = []
+role = "citation"
+family = "web"
+[template.fields]
+url = ["url"]
+archive_url = ["archive-url", "archiveurl"]
+archive_date_raw = ["archive-date", "archivedate"]
+title = ["title"]
+work = ["website", "work"]
+url_status = ["url-status", "deadlink", "deadurl"]
+
+[[template]]
+name = "citation"
+aliases = []
+role = "citation"
+family = "other_template"
+[template.fields]
+url = ["url"]
+archive_url = ["archive-url", "archiveurl", "archive_url"]
+archive_date_raw = ["archive-date", "archivedate", "archive_date"]
+title = ["title"]
+authors = ["author", "last", "first", "last1", "first1", "last2", "first2", "authors"]
+harv_names = ["last1", "last2", "last3", "last4"]
+harv_ref = ["ref"]
+date_raw = ["date"]
+year = ["year"]
+publisher = ["publisher"]
+work = ["work", "journal", "website", "newspaper", "series"]
+language = ["language", "lang"]
+isbn = ["isbn"]
+doi = ["doi"]
+access_date_raw = ["access-date", "accessdate"]
+url_status = ["url-status", "deadlink", "deadurl"]
+
+[[template]]
+name = "cite AV media"
+aliases = ["cite video"]
+role = "citation"
+family = "other_template"
+[template.fields]
+url = ["url"]
+archive_url = ["archive-url", "archiveurl"]
+archive_date_raw = ["archive-date", "archivedate"]
+title = ["title"]
+authors = ["people", "author"]
+harv_names = ["last1", "last2", "last3", "last4"]
+harv_ref = ["ref"]
+date_raw = ["date"]
+year = ["year"]
+publisher = ["publisher"]
+work = ["work"]
+language = ["language", "lang"]
+access_date_raw = ["access-date", "accessdate"]
+url_status = ["url-status", "deadlink", "deadurl"]
+
+[[template]]
+name = "cite video game"
+aliases = []
+role = "citation"
+family = "other_template"
+[template.fields]
+title = ["title"]
+publisher = ["publisher"]
+language = ["lang", "language"]
+
+[[template]]
+name = "cite tweet"
+aliases = []
+role = "citation"
+family = "web"
+[template.fields]
+archive_url = ["archive-url", "archiveurl"]
+archive_date_raw = ["archive-date", "archivedate"]
+title = ["title"]
+authors = ["author"]
+harv_names = ["last1", "last2", "last3", "last4"]
+harv_ref = ["ref"]
+date_raw = ["date"]
+language = ["language", "lang"]
+access_date_raw = ["access-date", "accessdate"]
+url_status = ["url-status", "deadlink", "deadurl"]
+
+# Archive wrapper: {{Архивировано|url=<archive URL>|date=...}}, used as {{webarchive}} is.
+[[template]]
+name = "архивировано"
+aliases = []
+role = "citation"
+family = "web"
+archive_wrapper = true
+[template.fields]
+archive_url = ["url"]
+archive_date_raw = ["date"]
+
+# Encyclopedias and dictionaries.
+[[template]]
+name = "БРЭ"
+aliases = []
+role = "citation"
+family = "encyclopedia"
+[template.fields]
+url = ["ссылка"]
+archive_url = ["архив"]
+archive_date_raw = ["архив дата"]
+title = ["статья", "название", "заглавие"]
+authors = ["автор"]
+harv_ref = ["ref"]
+year = ["год"]
+
+[[template]]
+name = "БСЭ3"
+aliases = []
+role = "citation"
+family = "encyclopedia"
+[template.fields]
+archive_url = ["archiveurl"]
+archive_date_raw = ["archivedate"]
+title = ["заглавие", "1"]
+
+[[template]]
+name = "БСЭ2"
+aliases = []
+role = "citation"
+family = "encyclopedia"
+[template.fields]
+title = ["название"]
+
+# Wikisource articles of encyclopedias: {{ВТ-ЭСБЕ|<article>}}; the four take the article title as parameter 1.
+[[template]]
+name = "ВТ-ЭСБЕ"
+aliases = ["ВТ-НЭС", "ВТ-БСЭ1", "ВТ-МЭСБЕ"]
+role = "citation"
+family = "encyclopedia"
+[template.fields]
+title = ["1"]
+
+[[template]]
+name = "Фасмер"
+aliases = []
+role = "citation"
+family = "encyclopedia"
+[template.fields]
+title = ["1"]
+
+[[template]]
+name = "ЕІУ"
+aliases = []
+role = "citation"
+family = "encyclopedia"
+
+# Registers, databases and sites cited by an identifier.
+[[template]]
+name = "ГВР"
+aliases = []
+role = "citation"
+family = "web"
+[template.fields]
+title = ["2"]
+
+[[template]]
+name = "ГИ"
+aliases = []
+role = "citation"
+family = "other_template"
+[template.fields]
+title = ["2"]
+
+[[template]]
+name = "GRIN"
+aliases = []
+role = "citation"
+family = "web"
+
+[[template]]
+name = "knesset.gov.il"
+aliases = []
+role = "citation"
+family = "web"
+
+[[template]]
+name = "Zman.com"
+aliases = []
+role = "citation"
+family = "news"
+[template.fields]
+title = ["2"]
+date_raw = ["3"]
+
+[[template]]
+name = "YouTube"
+aliases = ["Youtube"]
+role = "citation"
+family = "web"
+[template.fields]
+title = ["title", "2"]
+
+[[template]]
+name = "RuTube"
+aliases = []
+role = "citation"
+family = "web"
+[template.fields]
+title = ["title"]
+
+[[template]]
+name = "карта"
+aliases = []
+role = "citation"
+family = "other_template"
+[template.fields]
+title = ["1"]
+
+[[template]]
+name = "АрхИ"
+aliases = []
+role = "citation"
+family = "other_template"
+[template.fields]
+title = ["заглавие", "заглавие дела"]
+
+[[template]]
+name = "Адыгская топонимия"
+aliases = []
+role = "citation"
+family = "book"
+
+[[template]]
+name = "Биография Кубанских названий"
+aliases = []
+role = "citation"
+family = "book"
+
+# Short citations written inside a ref ({{harvnb|Иванов|1990|p=5}}; {{sfn0}} is {{sfn}} without its own
+# ref). They point to a bibliography entry, as {{sfn}} does, but make no footnote of their own: citations of
+# family short, with the harv fields of the CITEREF rules.
+[[template]]
+name = "harvnb"
+aliases = ["sfn0"]
+role = "citation"
+family = "short"
+[template.fields]
+harv_names = ["1", "2", "3", "4"]
+harv_ref = ["ref"]
+
+# Text inside refs: separators, abbreviations, language and format markers, links, dates.
+[[template]]
+name = "М."
+aliases = ["М"]
+role = "other"
+
+[[template]]
+name = "СПб."
+aliases = []
+role = "other"
+
+[[template]]
+name = "ref-en"
+aliases = []
+role = "other"
+
+[[template]]
+name = "ref-de"
+aliases = []
+role = "other"
+
+[[template]]
+name = "ref-fr"
+aliases = []
+role = "other"
+
+[[template]]
+name = "ref-uk"
+aliases = []
+role = "other"
+
+[[template]]
+name = "ref-doc"
+aliases = []
+role = "other"
+
+[[template]]
+name = "ref-pdf"
+aliases = []
+role = "other"
+
+[[template]]
+name = "nobr"
+aliases = []
+role = "other"
+
+[[template]]
+name = "проверено"
+aliases = ["V"]
+role = "other"
+
+[[template]]
+name = "нп3"
+aliases = ["iw"]
+role = "other"
+
+[[template]]
+name = "нп5"
+aliases = []
+role = "other"
+
+[[template]]
+name = "ISSN"
+aliases = []
+role = "other"
+
+[[template]]
+name = "trf"
+aliases = []
+role = "other"

@@ -2,6 +2,97 @@
 
 A high-performance Rust parser for extracting clean text from Russian Wikipedia articles in wikitext format. Removes all markup (templates, infoboxes, tables, references, links, etc.) and extracts only the main article text.
 
+This repository holds two paths that share no parsing code:
+
+- **The legacy prose path** (`wikitext_parser_rust`, `clean_parsed`, `parse_single`, `export_parsed` and the
+  shell scripts), described from [Features](#features) on. It is **frozen**: its output is byte-identical to
+  tag `v0.1.0`, which the paper's texts use, and a regression test (`tests/legacy_regression.rs`) holds it there.
+  Its source files are not edited.
+- **The structured parse** (`parse_components`), described next.
+
+## Structured parse: `parse_components`
+
+`parse_components` parses wikitext into its components and writes one long Parquet table per component type, every
+row located in the page by byte and code-point span, section and paragraph. Schema `1.0.0` (frozen) has eight
+tables:
+
+- `pages`: one row per page version, always, with its `status` (`ok`, `redirect`, `null_input`, `empty`,
+  `fallback`, `budget`, `depth_limit`, `panic`, `hang`), parser warnings and row counts;
+- `timings`: parse and walk times per page version (the one table that differs between runs);
+- `sections` (the section tree, with paths and roles), `paragraphs` (the page's own text, with list items);
+- `templates` (every template with its parameters, never expanded), `refs` (inline, named, reused,
+  list-defined and footnote-template refs, resolved), `ref_lists`, and `citations` (one row per source: citation
+  templates with their fields, bare links and plain-text refs, archive URLs unwrapped, hosts and registrable
+  domains, `{{sfn}}` resolution).
+
+**[SCHEMA.md](SCHEMA.md) documents every table and column**: types, meaning, null rules, the exact normalisation
+behind every `fp`, `title_norm`, `harv_key` and `host`, the statuses, the label conventions and the known
+limitations. Templates are not expanded, so categories and refs that only templates add are invisible. The
+paragraph text is not the legacy path's text. The design is in
+`docs/superpowers/specs/2026-10-27-structured-parse-design.md`.
+
+```bash
+cargo build --release
+
+# A crossection_diff file (pair layout): every text column gets a label, <key>=<site>:<version>.
+./target/release/parse_components --input data/crossection_diff/2025-01-01/file.parquet --out out/ \
+    --label official_text=wikipedia:2025-01-01 --label clone_text=ruwiki:2025-01-01
+
+# A timeseries_diff file: both columns are Wikipedia.
+./target/release/parse_components --input <dir> --out out/ \
+    --label official_text=wikipedia:forkday --label clone_text=wikipedia:2025-01-01
+
+# The test corpus (long layout): the keys are values of its version column.
+./target/release/parse_components --input tests/corpus/wikipedia_v1.parquet --out out/ \
+    --label wiki_forkday=wikipedia:forkday --label wiki_2025=wikipedia:2025-01-01 \
+    --label deleted_wiki_2025=wikipedia:2025-01-01
+
+# One .wiki file, as one JSON document.
+./target/release/parse_components --input article.wiki --label wikipedia:adhoc --format json --out article.json
+```
+
+- **Labels are required and never inferred.** `<key>` is a text column (pair and single layouts) or a value of
+  the `version` column (long layout); a `.wiki` file takes `<site>:<version>`. `<site>` selects the settings file
+  the text is parsed with: `wikipedia` (`config/sites/ru.wikipedia.toml`) or `ruwiki` (`config/sites/ruwiki.toml`).
+  A column name never says which site a text comes from: in `timeseries_diff` both columns are Wikipedia. A label
+  that matches nothing, and a text without a label, are errors.
+- The layout (`pair`, `single`, `long`) is detected from the columns, or set with `--layout`; `--text-column`
+  names the text column of a single-column file.
+- An input directory means its `*.parquet` files, sorted by name. Each input gets one part file per table,
+  `<out>/<table>/<stem>.parquet`, written under a `.tmp` name and renamed when complete, plus
+  `<out>/manifest.json` (versions, settings and registry hashes, arguments, inputs and outputs with row counts,
+  status counts, pages per second).
+- Options: `--tables refs,citations` (a subset; `pages` is always written), `--jobs N` (default: all cores),
+  `--budget STEPS` (the parser's step budget, default 2,700,000,000), `--no-fallback` (failed pages get their
+  failure status instead of the fallback scanner's rows), `--resume` (skip finished inputs),
+  `--format json`, `--config-dir`.
+- Work is bounded by counted steps, not by the clock, so a page's status does not depend on the machine. A page the
+  parser cannot finish still gets rows from a linear fallback scanner (`status = fallback`).
+- Measured on one row group of the 2025 cross-section (14,568 pairs) with `--jobs 12` on a 12-thread laptop CPU:
+  1,844 to 1,932 page versions per second over three runs, no page over budget. That projects to under half an
+  hour for each input family.
+
+### Tests
+
+```bash
+cargo test --release                         # everything; corpus pages up to 260,000 characters are slow in debug
+cargo test --release --features test-hooks   # adds the watchdog tests
+```
+
+- The public test corpus is `tests/corpus/wikipedia_v1.parquet` (180 Wikipedia page versions, CC BY-SA, see
+  `tests/corpus/ATTRIBUTION.md`), with the expected outputs in `tests/expected/` and the schema in
+  `tests/schema/v1.json`.
+- **The private corpus** (the Ruwiki versions) never enters this repository. Tests read it from the path in
+  `WIKITEXT_PRIVATE_CORPUS`, by default
+  `../ruwiki_replication_package_sources/data/results/sources/test_corpus/parser_test_corpus_v1.parquet`, and check
+  its sha256 first. When it is absent, each private test passes after printing
+  `SKIPPED (private corpus absent): <test name>`. Cargo hides that line unless the test output is shown:
+  `cargo test --release -- --nocapture 2>&1 | grep SKIPPED` lists them.
+- `UPDATE_EXPECTED=1 cargo test --release --test snapshots` rewrites the structured snapshots, public and private
+  together (it fails without the private corpus). The schema is frozen: `tests/schema/v1.json` is never rewritten.
+- `#[ignore]` tests: `generate_selection` (picks the readable snapshots once), `sfn_resolution_rate`, and
+  `locality_report_sample` (a locality report on a performance sample, path in `WIKITEXT_SAMPLE`, counts only).
+
 ## Features
 
 - Built on [`parse_wiki_text`](https://docs.rs/parse_wiki_text/latest/parse_wiki_text/) for efficient MediaWiki parsing

@@ -1,0 +1,10 @@
+# Locality violations that are real long-range effects of an edit, not parser artefacts (tests/locality.rs).
+# Private (Ruwiki) entries go in the gitignored tests/private/locality_allow.toml instead. None so far.
+# An entry, one per violating component (the test writes candidates to target/tmp/locality_*_violations.toml):
+#
+# [[allow]]
+# page_id = "7220"
+# versions = ["wiki_forkday", "wiki_2025"]
+# table = "sections"
+# fp = "c0f022a3b90c0bcb"
+# reason = "one line: why the edit changes this component away from its own lines"

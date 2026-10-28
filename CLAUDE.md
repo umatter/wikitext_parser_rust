@@ -6,6 +6,51 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A high-performance Rust parser for extracting clean text from Russian Wikipedia articles in wikitext format. Processes Parquet files containing both official Russian Wikipedia and Ruwiki fork versions, removing all markup (templates, infoboxes, tables, references, links) to extract plain paragraph text.
 
+## Structured parse (`parse_components`) and the frozen legacy path
+
+The repository has two paths that share no parsing code. Everything from "Building and Testing" on describes the
+**legacy prose path**, which is **frozen**: `src/parser.rs`, `src/main.rs`, `src/clean_parsed.rs`,
+`src/parse_single.rs`, `src/export_parsed.rs` and the `*.sh` scripts are never edited, they keep
+`parse_wiki_text = "0.1"`, and their output stays byte-identical to tag `v0.1.0` (`tests/legacy_regression.rs`).
+
+The **structured parse** is the library `wikitext_components` (`src/components/`) and the binary
+`parse_components` (`src/parse_components.rs`), on the vendored `parse-wiki-text-2` (`vendor/`, patched only as
+`vendor/parse-wiki-text-2/VENDORED.md` records). It writes one long Parquet table per component type: `pages`
+(one row per page version, with its status), `timings`, `sections`, `paragraphs`, `templates`, `refs`,
+`ref_lists`, `citations`, plus `manifest.json`.
+
+- **`SCHEMA.md`** documents every table and column, the normalisation behind every `fp`, `title_norm`,
+  `harv_key` and `host` (each citing the function that computes it), the statuses, the labels and the known
+  limitations. Keep it in step with the code.
+- **Schema `1.0.0` is frozen**: `tests/schema/v1.json` is never rewritten. A schema change bumps
+  `SCHEMA_VERSION` (`src/components/model.rs`; minor: a column or table added; major: renamed, removed or changed
+  meaning) and is pinned in a file of its own.
+- **Labels**: every text needs `--label <key>=<site>:<version>`, never inferred. `<key>` is a text column (pair,
+  single) or a `version` value (long); a `.wiki` file takes `<site>:<version>`. Sites are the `site` keys of
+  `config/sites/*.toml`: `wikipedia`, `ruwiki`. Corpus labels: `wiki_forkday=wikipedia:forkday`,
+  `wiki_2025=wikipedia:2025-01-01`, `deleted_wiki_2025=wikipedia:2025-01-01`, `ruwiki_2025=ruwiki:2025-01-01`;
+  `crossection_diff`: `official_text=wikipedia:2025-01-01`, `clone_text=ruwiki:2025-01-01`.
+- Site knowledge lives in `config/sites/*.toml`, template and section roles in `config/registry/`; the code knows
+  no particular wiki.
+
+```bash
+cargo build --release
+./target/release/parse_components --input <file-or-dir> --out <dir> --label <key>=<site>:<version> ... \
+    [--layout pair|single|long] [--text-column C] [--format parquet|json] [--tables a,b] [--jobs N] \
+    [--budget STEPS] [--no-fallback] [--resume] [--config-dir DIR]
+cargo test --release                         # all tests; always --release (large corpus pages are slow in debug)
+cargo test --release --features test-hooks   # plus the watchdog tests
+```
+
+- **Privacy.** Ruwiki markup never enters git, nor anything that reproduces it (expected outputs, snapshots,
+  facts). The private corpus is read from `WIKITEXT_PRIVATE_CORPUS` (default
+  `../ruwiki_replication_package_sources/data/results/sources/test_corpus/parser_test_corpus_v1.parquet`, sha256
+  checked); readable private outputs live only in the gitignored `tests/private/`. Without the corpus, private
+  tests print `SKIPPED (private corpus absent): <name>`, visible only with `-- --nocapture`.
+- `UPDATE_EXPECTED=1` rewrites the structured snapshots (`tests/snapshots.rs`), public and private together; it
+  fails when the private corpus is absent.
+- No build, test or run contacts a website.
+
 ## Building and Testing
 
 ```bash
