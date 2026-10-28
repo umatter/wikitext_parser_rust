@@ -26,6 +26,7 @@
 //!   enter and exit events.
 
 mod sections;
+mod templates;
 mod text;
 mod tree;
 
@@ -38,6 +39,7 @@ use crate::settings::Settings;
 use crate::spans::CharIndex;
 
 use sections::Sections;
+use templates::Templates;
 use text::{Flat, ParaKind, TextBuilder};
 use tree::{Element, Part, Visit};
 
@@ -97,12 +99,15 @@ pub fn walk(
     limits: &WalkLimits,
 ) -> Result<Components, WalkError> {
     let chars = CharIndex::new(text);
-    let mut w = Walker::new(text, settings, &chars);
+    let mut w = Walker::new(text, settings, registry, &chars);
     tree::traverse(&parsed.output.nodes, limits, &mut w)?;
     w.paras.break_paragraph(ParaKind::Prose);
     // Component rows collected during the walk get their `para_id` and `para_offset` here, with
     // `w.resolve`, now that every paragraph is closed and before `finish` consumes the builder.
+    let templates = std::mem::replace(&mut w.templates, Templates::new(text, &chars, settings, registry));
+    let templates = templates.finish(|place| w.resolve(place));
     Ok(Components {
+        templates,
         sections: w.sections.finish(text, &chars, registry),
         paragraphs: w.paras.finish(),
         ..Components::default()
@@ -158,10 +163,22 @@ struct Ctx {
     /// For the children of a link without a label: the text node at this byte is its target, already
     /// added as the title.
     title_at: Option<usize>,
+    /// For the children of a template's name part that holds parameter `1`: only what starts at or after
+    /// this byte adds text.
+    from: usize,
+    /// What the parts and parameters among the children belong to.
+    owner: Owner,
+}
+
+/// The element a part (a name, a value) or a parameter is a child of.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Owner {
+    None,
+    Template,
+    Param,
 }
 
 /// Where a component sits, as the walk meets it.
-#[cfg_attr(not(test), allow(dead_code))] // placed by the component tables of Tasks 13b, 15 and 16
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Place {
     section_id: i32,
@@ -173,6 +190,7 @@ struct Walker<'t, 's> {
     text: &'t str,
     settings: &'s Settings,
     paras: TextBuilder<'t>,
+    templates: Templates<'t, 's>,
     sections: Sections,
     /// The current section.
     section: i32,
@@ -190,7 +208,12 @@ struct Walker<'t, 's> {
 }
 
 impl<'t, 's> Walker<'t, 's> {
-    fn new(text: &'t str, settings: &'s Settings, chars: &'t CharIndex) -> Walker<'t, 's> {
+    fn new(
+        text: &'t str,
+        settings: &'s Settings,
+        registry: &'s Registry,
+        chars: &'t CharIndex,
+    ) -> Walker<'t, 's> {
         let root = Ctx {
             sink: Sink::Para,
             kind: ParaKind::Prose,
@@ -200,11 +223,14 @@ impl<'t, 's> Walker<'t, 's> {
             list_start: None,
             url: false,
             title_at: None,
+            from: 0,
+            owner: Owner::None,
         };
         Walker {
             text,
             settings,
             paras: TextBuilder::new(text, chars),
+            templates: Templates::new(text, chars, settings, registry),
             sections: Sections::new(),
             section: 0,
             flats: Vec::new(),
@@ -221,7 +247,6 @@ impl<'t, 's> Walker<'t, 's> {
 
     /// The place of a component about to be entered. Call it before `enter`: a component whose `enter`
     /// breaks the paragraph (a table, a list, a preformatted block) is then placed in the paragraph before.
-    #[cfg_attr(not(test), allow(dead_code))]
     fn place(&self) -> Place {
         let around = self.top();
         let para = match around.excluded {
@@ -233,7 +258,6 @@ impl<'t, 's> Walker<'t, 's> {
     }
 
     /// `para_id` and `para_offset` of a place, once every paragraph is closed.
-    #[cfg_attr(not(test), allow(dead_code))]
     fn resolve(&self, place: Place) -> (Option<i32>, Option<i32>) {
         match place.para.and_then(|(slot, offset)| self.paras.para_id(slot).map(|id| (id, offset))) {
             Some((id, offset)) => (Some(id), Some(offset)),
@@ -342,6 +366,13 @@ impl<'t, 's> Walker<'t, 's> {
                         _ => return,
                     }
                 }
+                if around.from > start {
+                    // The part of a template name after its colon.
+                    match value.get(around.from - start..) {
+                        Some(rest) if end > around.from => (value, start) = (rest, around.from),
+                        _ => return,
+                    }
+                }
                 if around.title_at == Some(start) {
                     return;
                 }
@@ -408,8 +439,14 @@ impl<'t, 's> Walker<'t, 's> {
                     self.exclude(around, c);
                 }
             }
-            Node::Template { .. }
-            | Node::Parameter { .. }
+            Node::Template { .. } => {
+                let place = self.place();
+                self.templates.enter(node, place);
+                self.touch(around, start, end);
+                self.exclude(around, c);
+                c.owner = Owner::Template;
+            }
+            Node::Parameter { .. }
             | Node::Image { .. }
             | Node::Category { .. }
             | Node::Comment { .. }
@@ -447,6 +484,7 @@ impl<'t, 's> Walker<'t, 's> {
                 let id = self.headings.pop().expect("pushed on enter");
                 self.sections.set_title(id, title);
             }
+            Node::Template { .. } => self.templates.close(),
             Node::Link { .. } => self.after_link = Some(node.end()),
             Node::Preformatted { .. } => {
                 if c.sink == Sink::Para {
@@ -466,8 +504,13 @@ impl<'t, 's> Walker<'t, 's> {
 impl<'n, 'a> Visit<'n, 'a> for Walker<'_, '_> {
     fn enter(&mut self, item: Element<'n, 'a>) {
         let after_link = self.after_link.take();
-        let around = self.top();
-        let mut c = Ctx { url: false, title_at: None, list_start: None, ..around };
+        let mut around = self.top();
+        if let Element::Node(n) = item {
+            if around.from > 0 && n.end() <= around.from {
+                around.sink = Sink::Mute; // before the colon of a template name
+            }
+        }
+        let mut c = Ctx { url: false, title_at: None, list_start: None, from: 0, owner: Owner::None, ..around };
         match item {
             Element::Node(node) => self.enter_node(node, around, &mut c, after_link),
             Element::ListItem(_) | Element::DefItem(_) => {
@@ -484,10 +527,21 @@ impl<'n, 'a> Visit<'n, 'a> for Walker<'_, '_> {
                 self.ctx.last_mut().expect("root").list_start = None;
                 self.touch(around, span.0, span.1);
             }
+            // The name part of a module or parser function holds parameter 1, after its colon.
+            Element::Part(Part::Name, _) if around.owner == Owner::Template && self.templates.split_from().is_some() => {
+                self.flats.push(Flat::default());
+                c.sink = Sink::Flat(self.flats.len() - 1);
+                c.from = self.templates.split_from().unwrap_or(0);
+            }
             // Names and attributes never add text.
             Element::Part(Part::Name | Part::Attributes, _) => c.sink = Sink::Mute,
+            // A parameter value is a flat text.
+            Element::Part(Part::Value, _) if around.owner == Owner::Param => {
+                self.flats.push(Flat::default());
+                c.sink = Sink::Flat(self.flats.len() - 1);
+            }
+            Element::Param(_) => c.owner = Owner::Param,
             Element::Part(Part::Value, _)
-            | Element::Param(_)
             | Element::Caption(_)
             | Element::Row(_)
             | Element::Cell(_) => {}
@@ -506,7 +560,16 @@ impl<'n, 'a> Visit<'n, 'a> for Walker<'_, '_> {
                     self.paras.break_paragraph(c.kind);
                 }
             }
-            Element::Part(..) | Element::Param(_) | Element::Caption(_) | Element::Row(_) | Element::Cell(_) => {}
+            Element::Part(Part::Name, _) if around.owner == Owner::Template && matches!(c.sink, Sink::Flat(_)) => {
+                let text = self.flats.pop().expect("pushed on enter").into_text();
+                self.templates.set_split_text(text);
+            }
+            Element::Part(Part::Value, _) if around.owner == Owner::Param => {
+                let text = self.flats.pop().expect("pushed on enter").into_text();
+                self.templates.set_pending(text);
+            }
+            Element::Param(p) => self.templates.close_param(p),
+            Element::Part(..) | Element::Caption(_) | Element::Row(_) | Element::Cell(_) => {}
         }
     }
 }
@@ -537,9 +600,10 @@ mod tests {
     /// (byte offset of the component, section_id, para_id, para_offset) for each template and tag.
     fn places(text: &str) -> Vec<(usize, i32, Option<i32>, Option<i32>)> {
         let settings = Settings::load(Path::new("config/sites/ru.wikipedia.toml")).unwrap();
+        let registry = Registry::default();
         let parsed = crate::frontend::parse(text, settings.configuration(), 0).unwrap();
         let chars = CharIndex::new(text);
-        let mut p = Probe { w: Walker::new(text, &settings, &chars), seen: Vec::new() };
+        let mut p = Probe { w: Walker::new(text, &settings, &registry, &chars), seen: Vec::new() };
         let unlimited = WalkLimits { budget: u64::MAX, depth_cap: usize::MAX };
         tree::traverse(&parsed.output.nodes, &unlimited, &mut p).unwrap();
         p.w.paras.break_paragraph(ParaKind::Prose);
