@@ -15,7 +15,9 @@
 //!
 //! A component is placed with `Walker::place`, called when the walk enters it (before `Walker::enter`
 //! pushes the component's own context), and the place becomes `section_id`, `para_id` and `para_offset`
-//! with `Walker::resolve` once the walk has closed the last paragraph (see `walk`).
+//! with `Walker::resolve` once the walk has closed the last paragraph (see `walk`). `place` runs before
+//! `enter`, so a component whose own `enter` breaks the paragraph (a table, a list, a preformatted block)
+//! would be placed in the paragraph before it; no component of milestones 0-2 is of that kind.
 //! - Task 13b (templates): enter `Node::Template` in `Walker::enter_node`; give each parameter's
 //!   `Part::Value` a `Sink::Flat` (its `value_text`) and the template as the parent of what it contains.
 //! - Task 15 (refs, ref lists): enter `Node::Tag` named `ref` or `references`, and footnote and ref-list
@@ -62,7 +64,7 @@ pub struct WalkStats {
 }
 
 /// Extension tags whose content adds nothing to the text (`text.rs`).
-const EXCLUDED_TAGS: [&str; 20] = [
+const EXCLUDED_TAGS: [&str; 21] = [
     "ref",
     "references",
     "math",
@@ -83,6 +85,7 @@ const EXCLUDED_TAGS: [&str; 20] = [
     "categorytree",
     "hiero",
     "indicator",
+    "includeonly",
 ];
 
 /// Walks a parsed page into its components.
@@ -100,7 +103,7 @@ pub fn walk(
     // Component rows collected during the walk get their `para_id` and `para_offset` here, with
     // `w.resolve`, now that every paragraph is closed and before `finish` consumes the builder.
     Ok(Components {
-        sections: w.sections.finish(text.len(), &chars, registry),
+        sections: w.sections.finish(text, &chars, registry),
         paragraphs: w.paras.finish(),
         ..Components::default()
     })
@@ -144,9 +147,12 @@ struct Ctx {
     kind: ParaKind,
     /// The anchor of the outermost excluded element around, if any.
     excluded: Option<Anchor>,
-    /// The innermost list around: its id, and its depth (0 outside lists).
+    /// The innermost list around: its id (counting every list met), and its depth (0 outside lists).
     list_id: i32,
     list_depth: i32,
+    /// For the children of a list: the list's start, until its first item takes it. The parser starts a
+    /// list's first item after its marker and every later item at its marker.
+    list_start: Option<usize>,
     /// For the children of an external link: its URL has not ended yet.
     url: bool,
     /// For the children of a link without a label: the text node at this byte is its target, already
@@ -172,6 +178,8 @@ struct Walker<'t, 's> {
     section: i32,
     /// Open `Sink::Flat` texts, innermost last.
     flats: Vec<Flat>,
+    /// The section each open heading opened, innermost last.
+    headings: Vec<i32>,
     /// The context of each open element, the root's first.
     ctx: Vec<Ctx>,
     /// Lists met so far.
@@ -189,16 +197,18 @@ impl<'t, 's> Walker<'t, 's> {
             excluded: None,
             list_id: -1,
             list_depth: 0,
+            list_start: None,
             url: false,
             title_at: None,
         };
         Walker {
             text,
             settings,
-            paras: TextBuilder::new(chars),
+            paras: TextBuilder::new(text, chars),
             sections: Sections::new(),
             section: 0,
             flats: Vec::new(),
+            headings: Vec::new(),
             ctx: vec![root],
             lists: 0,
             after_link: None,
@@ -209,7 +219,8 @@ impl<'t, 's> Walker<'t, 's> {
         *self.ctx.last().expect("the root context is never popped")
     }
 
-    /// The place of a component about to be entered.
+    /// The place of a component about to be entered. Call it before `enter`: a component whose `enter`
+    /// breaks the paragraph (a table, a list, a preformatted block) is then placed in the paragraph before.
     #[cfg_attr(not(test), allow(dead_code))]
     fn place(&self) -> Place {
         let around = self.top();
@@ -298,10 +309,29 @@ impl<'t, 's> Walker<'t, 's> {
         rest.iter().find(|b| matches!(b, b'|' | b']')) == Some(&b'|')
     }
 
+    /// A list item's span: from its own marker (`list_start` for the first item of a list) to its end, or to
+    /// its last node before its first nested list, without trailing whitespace.
+    fn item_span(&self, item: Element, list_start: Option<usize>) -> (usize, usize) {
+        let ((item_start, item_end), nodes) = match item {
+            Element::ListItem(i) => ((i.start, i.end), &i.nodes),
+            Element::DefItem(d) => ((d.start, d.end), &d.nodes),
+            _ => unreachable!("only list items have list spans"),
+        };
+        let start = list_start.map_or(item_start, |s| s.min(item_start));
+        let is_list = |n: &Node| {
+            matches!(n, Node::OrderedList { .. } | Node::UnorderedList { .. } | Node::DefinitionList { .. })
+        };
+        let end = match nodes.iter().position(is_list) {
+            None => item_end,
+            Some(k) => nodes[..k].last().map_or(start, |n| n.end()),
+        };
+        let end = end.clamp(start, self.text.len().max(start));
+        (start, start + self.text.get(start..end).map_or(0, |s| s.trim_end().len()))
+    }
+
     /// `after_link`: the end of the link that is this node's previous sibling, if it is one.
     fn enter_node(&mut self, node: &Node, around: Ctx, c: &mut Ctx, after_link: Option<usize>) {
         let (start, end) = (node.start(), node.end());
-        let prose = around.sink == Sink::Para;
         match node {
             Node::Text { value, .. } => {
                 let (mut value, mut start) = (*value, start);
@@ -341,17 +371,20 @@ impl<'t, 's> Walker<'t, 's> {
                 self.touch(around, start, end);
             }
             Node::Heading { level, .. } => {
-                if prose {
-                    self.paras.break_paragraph(around.kind);
-                    let level = *level as usize;
-                    let raw = self.text.get(start + level..end.saturating_sub(level)).unwrap_or("").trim();
-                    self.section = self.sections.open(level as u8, start, end, raw);
-                    self.paras.set_section(self.section);
-                    self.flats.push(Flat::default());
-                    c.sink = Sink::Flat(self.flats.len() - 1);
-                } else {
-                    self.boundary(around);
+                // Every heading opens a section and breaks the paragraph, wherever it is (the parser makes
+                // headings in running text and in table cells); the components inside keep the anchor of an
+                // excluded ancestor.
+                self.paras.break_before(around.kind, start);
+                if let Sink::Flat(i) = around.sink {
+                    self.flats[i].push(" ");
                 }
+                let level = *level as usize;
+                let raw = self.text.get(start + level..end.saturating_sub(level)).unwrap_or("").trim();
+                self.section = self.sections.open(level as u8, start, end, raw);
+                self.paras.set_section(self.section);
+                self.headings.push(self.section);
+                self.flats.push(Flat::default());
+                c.sink = Sink::Flat(self.flats.len() - 1);
             }
             Node::Link { target, text, .. } => {
                 self.touch(around, start, end);
@@ -391,14 +424,16 @@ impl<'t, 's> Walker<'t, 's> {
                 self.exclude(around, c);
             }
             Node::Preformatted { .. } => {
+                // Not touched: the parser ends the block after its newline (past the text at its end), so
+                // its content gives the span.
                 self.boundary(around);
-                self.touch(around, start, end);
                 c.kind = ParaKind::Preformatted;
             }
             Node::OrderedList { .. } | Node::UnorderedList { .. } | Node::DefinitionList { .. } => {
                 self.boundary(around);
                 c.list_id = self.lists;
                 c.list_depth = around.list_depth + 1;
+                c.list_start = Some(start);
                 self.lists += 1;
             }
         }
@@ -407,12 +442,10 @@ impl<'t, 's> Walker<'t, 's> {
     fn exit_node(&mut self, node: &Node, c: Ctx, around: Ctx) {
         match node {
             Node::Heading { .. } => {
-                // A heading that opened a section has its own flat text; others write to the one around.
-                if let (Sink::Flat(i), true) = (c.sink, c.sink != around.sink) {
-                    debug_assert_eq!(i + 1, self.flats.len());
-                    let title = self.flats.pop().expect("pushed on enter").into_text();
-                    self.sections.set_title(self.section, title);
-                }
+                debug_assert_eq!(c.sink, Sink::Flat(self.flats.len() - 1));
+                let title = self.flats.pop().expect("pushed on enter").into_text();
+                let id = self.headings.pop().expect("pushed on enter");
+                self.sections.set_title(id, title);
             }
             Node::Link { .. } => self.after_link = Some(node.end()),
             Node::Preformatted { .. } => {
@@ -434,7 +467,7 @@ impl<'n, 'a> Visit<'n, 'a> for Walker<'_, '_> {
     fn enter(&mut self, item: Element<'n, 'a>) {
         let after_link = self.after_link.take();
         let around = self.top();
-        let mut c = Ctx { url: false, title_at: None, ..around };
+        let mut c = Ctx { url: false, title_at: None, list_start: None, ..around };
         match item {
             Element::Node(node) => self.enter_node(node, around, &mut c, after_link),
             Element::ListItem(_) | Element::DefItem(_) => {
@@ -447,8 +480,9 @@ impl<'n, 'a> Visit<'n, 'a> for Walker<'_, '_> {
                     _ => ParaKind::ListItem { list_id, depth },
                 };
                 self.boundary(around);
-                let (start, end) = item.span().expect("an item has a span");
-                self.touch(around, start, end);
+                let span = self.item_span(item, around.list_start);
+                self.ctx.last_mut().expect("root").list_start = None;
+                self.touch(around, span.0, span.1);
             }
             // Names and attributes never add text.
             Element::Part(Part::Name | Part::Attributes, _) => c.sink = Sink::Mute,
@@ -551,6 +585,28 @@ mod tests {
         assert_eq!(
             places(t),
             vec![(at("{{a}}"), 0, Some(0), Some(5)), (at("{{b}}"), 0, Some(1), Some(5)), (at("{{c}}"), 0, None, None)]
+        );
+    }
+
+    #[test]
+    fn components_in_nested_items_take_the_nested_items_paragraph() {
+        let t = "* a {{p}}\n** b {{q}}\n* c {{r}}";
+        let at = |s: &str| t.find(s).unwrap();
+        assert_eq!(
+            places(t),
+            vec![(at("{{p}}"), 0, Some(0), Some(1)), (at("{{q}}"), 0, Some(1), Some(1)), (at("{{r}}"), 0, Some(2), Some(1))]
+        );
+    }
+
+    #[test]
+    fn components_after_a_heading_in_a_table_keep_the_tables_anchor() {
+        // The heading in the cell opens section 1; the components after it are still in the table, which
+        // has no paragraph, and not in the paragraph after the table.
+        let t = "Текст\n{|\n| {{x}}\n== H ==\n{{y}}\n|}\nпосле {{z}}";
+        let at = |s: &str| t.find(s).unwrap();
+        assert_eq!(
+            places(t),
+            vec![(at("{{x}}"), 0, None, None), (at("{{y}}"), 1, None, None), (at("{{z}}"), 1, Some(1), Some(5))]
         );
     }
 }

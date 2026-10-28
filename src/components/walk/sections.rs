@@ -1,4 +1,4 @@
-//! The section tree: the lead plus one section per heading the walk meets in prose.
+//! The section tree: the lead plus one section per heading, wherever the heading is.
 
 use crate::fingerprint::{fp, norm};
 use crate::model::SectionRow;
@@ -41,7 +41,8 @@ impl Sections {
 
     /// The rows, lead first. A section ends where the next one starts; its subtree ends at the next heading of
     /// the same or a higher level; its parent is the nearest earlier section with a lower level.
-    pub fn finish(self, text_len: usize, chars: &CharIndex, registry: &Registry) -> Vec<SectionRow> {
+    pub fn finish(self, text: &str, chars: &CharIndex, registry: &Registry) -> Vec<SectionRow> {
+        let text_len = text.len();
         let n = self.heads.len() + 1;
         let starts: Vec<usize> = std::iter::once(0).chain(self.heads.iter().map(|h| h.start)).collect();
         let levels: Vec<i32> = std::iter::once(0).chain(self.heads.iter().map(|h| h.level)).collect();
@@ -82,6 +83,10 @@ impl Sections {
                 }
             };
             let (start, end) = (starts[i], starts.get(i + 1).copied().unwrap_or(text_len));
+            debug_assert!(
+                start <= end && end <= text_len && text.is_char_boundary(start) && text.is_char_boundary(end),
+                "section span {start}..{end} outside a text of {text_len} bytes"
+            );
             rows.push(SectionRow {
                 id: i as i32,
                 start: start as i32,

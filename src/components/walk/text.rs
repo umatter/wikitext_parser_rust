@@ -6,7 +6,8 @@
 //!
 //! - **Whitespace.** Runs of whitespace (`char::is_whitespace`, so a decoded `&nbsp;` too) collapse to one
 //!   space, and the text is trimmed. Offsets (`para_offset`, `n_chars`) count code points of the collapsed text.
-//! - **Text and entities.** Plain text is added; character entities are added decoded.
+//! - **Text and entities.** Plain text is added; character entities are added decoded. A free URL in running
+//!   text stays in the text, as MediaWiki displays it.
 //! - **Bold and italic** markers add nothing; the text between them is added.
 //! - **Links.** A link adds the text of its label, or, without a label, its target title with any leading
 //!   colon and namespace prefix removed; then its link trail. The parser repeats the trail of a piped link as
@@ -19,12 +20,16 @@
 //!   start and an end tag is added.
 //! - **Extension tags.** `nowiki` adds its raw text and `poem` its content. `ref`, `references`, `math`,
 //!   `chem`, `ce`, `gallery`, `templatestyles`, `score`, `timeline`, `graph`, `mapframe`, `maplink`,
-//!   `syntaxhighlight`, `source`, `templatedata`, `imagemap`, `inputbox`, `categorytree`, `hiero` and
-//!   `indicator` add nothing. Any other extension tag adds its content.
+//!   `syntaxhighlight`, `source`, `templatedata`, `imagemap`, `inputbox`, `categorytree`, `hiero`,
+//!   `indicator` and `includeonly` (shown only where the page is transcluded) add nothing. Any other
+//!   extension tag adds its content, `noinclude` and `onlyinclude` among them.
 //! - **Excluded** (add nothing): templates, template parameters (`{{{1}}}`), files, categories, comments,
 //!   magic words, tables, and the extension tags listed above. Components inside an excluded node take the
 //!   `para_id` and `para_offset` of the outermost excluded node around them.
 //! - **Headings** add nothing to paragraphs; their text, under the same rules, is the section's `title_text`.
+//!   Every heading opens a section, wherever it is: in running text, in a table cell, in a template
+//!   parameter or in a tag. (The vendored parser makes headings, and lists, only in running text and in
+//!   table cells.)
 //!
 //! # Where paragraphs break
 //!
@@ -32,17 +37,22 @@
 //! renders between paragraphs), and at the start and end of a list, a table or a preformatted block.
 //! - A preformatted block is its own paragraph (`preformatted`).
 //! - Each list item is its own paragraph: `list_item`, or `definition_term` and `definition` in a definition
-//!   list, with `list_id` (the page's lists counted from 0 in document order, nested lists and lists inside
-//!   excluded nodes included) and `item_depth` (1 for an outermost list). A nested list ends the text of the
-//!   item around it.
-//! - Breaks, lists and headings inside an excluded node (a template parameter, a table cell, a ref) do not
-//!   break the page's paragraphs, and such a heading opens no section: excluded content makes no paragraphs.
+//!   list, with `list_id` and `item_depth` (1 for an outermost list). `list_id` counts, from 0 in document
+//!   order, the lists that have at least one paragraph; a list that has none (one in a table cell, or one
+//!   whose items have no text) takes no id. A nested list ends the text of the item around it.
+//! - A heading breaks the paragraph wherever it is. Paragraph breaks, lists and preformatted blocks inside an
+//!   excluded node (a template parameter, a table cell, a ref) do not: excluded content makes no paragraphs.
+//!   Components inside excluded content keep the paragraph and offset of their excluded ancestor, also
+//!   after a heading inside it.
 //! - A paragraph whose text is empty is dropped and takes no id.
 //!
 //! # Spans
 //!
 //! A paragraph's `start..end` runs from its first node to its last, excluded nodes included, leading and
-//! trailing whitespace not. A list item's span is its whole list item, nested lists included.
+//! trailing whitespace not. Spans lie inside the text and never overlap.
+//! - A list item's span starts at its own marker (the `*`, `#`, `;` or `:` of its level) and ends with the
+//!   item, or where its first nested list begins.
+//! - A paragraph that a heading inside an excluded node breaks ends before that heading.
 
 use crate::fingerprint::{fp, norm};
 use crate::model::ParagraphRow;
@@ -136,6 +146,7 @@ impl ParaKind {
 /// `anchor()`. A slot becomes a `para_id` when its paragraph closes with text, and `None` when it is dropped
 /// (`para_id`), so ids stay dense and in document order.
 pub struct TextBuilder<'t> {
+    text: &'t str,
     chars: &'t CharIndex,
     section_id: i32,
     cur: Flat,
@@ -147,8 +158,27 @@ pub struct TextBuilder<'t> {
 }
 
 impl<'t> TextBuilder<'t> {
-    pub fn new(chars: &'t CharIndex) -> TextBuilder<'t> {
-        TextBuilder { chars, section_id: 0, cur: Flat::default(), span: None, slots: Vec::new(), rows: Vec::new() }
+    /// A builder for the paragraphs of `text`, whose char index is `chars`.
+    pub fn new(text: &'t str, chars: &'t CharIndex) -> TextBuilder<'t> {
+        TextBuilder {
+            text,
+            chars,
+            section_id: 0,
+            cur: Flat::default(),
+            span: None,
+            slots: Vec::new(),
+            rows: Vec::new(),
+        }
+    }
+
+    /// `pos` moved into the text and back to a char boundary. (The parser ends a preformatted block that ends
+    /// the text one byte past it.)
+    fn fit(&self, pos: usize) -> usize {
+        let mut pos = pos.min(self.text.len());
+        while !self.text.is_char_boundary(pos) {
+            pos -= 1;
+        }
+        pos
     }
 
     /// The section that paragraphs opened from now on belong to.
@@ -174,6 +204,7 @@ impl<'t> TextBuilder<'t> {
 
     /// Extends the open paragraph's span over a node.
     pub fn touch(&mut self, start: usize, end: usize) {
+        let (start, end) = (self.fit(start), self.fit(end));
         self.span = Some(match self.span {
             None => (start, end),
             Some((s, e)) => (s.min(start), e.max(end)),
@@ -195,6 +226,16 @@ impl<'t> TextBuilder<'t> {
         self.slots.get(slot).copied().flatten()
     }
 
+    /// Closes the open paragraph as `kind`, its span cut back to end before `pos` (without the whitespace
+    /// there). For a heading inside an element that the paragraph's span already covers.
+    pub fn break_before(&mut self, kind: ParaKind, pos: usize) {
+        if let Some((start, end)) = self.span {
+            let end = self.fit(end.min(pos)).max(start);
+            self.span = Some((start, start + self.text[start..end].trim_end().len()));
+        }
+        self.break_paragraph(kind);
+    }
+
     /// Closes the open paragraph as `kind`. A paragraph without text is dropped; one that has met no node
     /// at all is left open, so it keeps its slot.
     pub fn break_paragraph(&mut self, kind: ParaKind) {
@@ -207,6 +248,11 @@ impl<'t> TextBuilder<'t> {
             self.slots.push(None);
             return;
         }
+        debug_assert!(
+            start <= end && self.text.is_char_boundary(start) && self.text.is_char_boundary(end),
+            "paragraph span {start}..{end} outside a text of {} bytes",
+            self.text.len()
+        );
         let id = self.rows.len() as i32;
         self.slots.push(Some(id));
         let n_chars = cur.len();
@@ -234,8 +280,19 @@ impl<'t> TextBuilder<'t> {
     }
 
     /// The paragraphs, in document order. An open paragraph is closed as prose first.
+    ///
+    /// The `list_id` given to `break_paragraph` counts every list the walk met; here it becomes the rank of
+    /// that list among the lists with at least one paragraph, so that ids are dense.
     pub fn finish(mut self) -> Vec<ParagraphRow> {
         self.break_paragraph(ParaKind::Prose);
+        let mut lists: Vec<i32> = self.rows.iter().filter_map(|r| r.list_id).collect();
+        lists.sort_unstable();
+        lists.dedup();
+        for r in &mut self.rows {
+            if let Some(l) = r.list_id {
+                r.list_id = Some(lists.binary_search(&l).expect("collected above") as i32);
+            }
+        }
         self.rows
     }
 }
@@ -258,7 +315,7 @@ mod tests {
     fn anchors_slots_and_dropped_paragraphs() {
         let text = "Раз два.\n\n{{x}}\n\nТри";
         let chars = CharIndex::new(text);
-        let mut b = TextBuilder::new(&chars);
+        let mut b = TextBuilder::new(text, &chars);
         b.push_text("Раз ", 0);
         assert_eq!((b.anchor(), b.slot()), (3, 0)); // the pending space is not written yet
         b.push_text("два.", 7);
@@ -281,8 +338,9 @@ mod tests {
 
     #[test]
     fn whitespace_only_text_does_not_extend_the_span() {
-        let chars = CharIndex::new("  ab  ");
-        let mut b = TextBuilder::new(&chars);
+        let text = "  ab  ";
+        let chars = CharIndex::new(text);
+        let mut b = TextBuilder::new(text, &chars);
         b.push_text("  ", 0);
         b.push_text("ab  ", 2);
         let rows = b.finish();

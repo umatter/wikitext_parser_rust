@@ -22,6 +22,12 @@ fn kinds(ps: &[ParagraphRow]) -> Vec<(&str, Option<i32>, Option<i32>, &str)> {
     ps.iter().map(|p| (p.kind.as_str(), p.list_id, p.item_depth, p.text.as_str())).collect()
 }
 
+/// The source slice of each paragraph, or a marker if its span is not a slice of `text`.
+fn spans(text: &str) -> Vec<&str> {
+    let c = components(text);
+    c.paragraphs.iter().map(|p| text.get(p.start as usize..p.end as usize).unwrap_or("<not in the text>")).collect()
+}
+
 const FIXTURES: [&str; 10] = [
     "archive_deadlink",
     "efn",
@@ -145,6 +151,8 @@ fn tags() {
     assert_eq!(texts("a<br/>b<br>c</br>d"), vec!["a b c d"]);
     assert_eq!(texts("x<sup>2</sup> <span style=\"a\">s</span><small>m</small>"), vec!["x2 sm"]);
     assert_eq!(texts("a<onlyinclude>b</onlyinclude>c"), vec!["abc"]);
+    assert_eq!(texts("a<noinclude>b</noinclude>c"), vec!["abc"]);
+    assert_eq!(texts("a<includeonly>b</includeonly>c"), vec!["ac"]);
 }
 
 #[test]
@@ -188,8 +196,74 @@ fn paragraph_spans() {
     let p = &c.paragraphs[1];
     assert_eq!(&t[p.start as usize..p.end as usize], "{{a}}Текст.<ref>x</ref>");
     let item = &c.paragraphs[2];
-    assert_eq!(&t[item.start as usize..item.end as usize], " пункт {{b}}");
+    assert_eq!(&t[item.start as usize..item.end as usize], "* пункт {{b}}");
     assert_eq!(item.kind, "list_item");
+}
+
+#[test]
+fn spans_stay_inside_the_text() {
+    // The parser ends a preformatted block that ends the text one byte past it, after its newline.
+    assert_eq!(spans("x\n pre"), vec!["x", "pre"]);
+    assert_eq!(spans("  {{a}} Текст"), vec!["{{a}} Текст"]);
+    assert_eq!(spans(" pre {{a}}\n"), vec!["pre {{a}}"]);
+    // Ending inside a template or an unclosed tag, in a preformatted block or not.
+    assert_eq!(spans("x\n {{a|b"), vec!["x", "{{a|b"]);
+    assert_eq!(spans("Текст {{a|b"), vec!["Текст {{a|b"]);
+    assert_eq!(spans("x\n <span>b"), vec!["x", "<span>b"]);
+    assert_eq!(spans("a <ref>b"), vec!["a <ref>b"]);
+    for t in ["x\n pre", "  {{a}} Текст", "x\n {{a|b", "x\n <span>b"] {
+        for p in components(t).paragraphs {
+            assert!(p.start <= p.end && p.end as usize <= t.len(), "{t:?}: {}..{}", p.start, p.end);
+            assert_eq!(p.end_char, t[..p.end as usize].chars().count() as i32, "{t:?}");
+        }
+    }
+}
+
+#[test]
+fn headings_open_sections_in_any_container() {
+    let c = components("Лид\n{|\n|\n== В таблице ==\n|}\nПосле");
+    let s: Vec<_> = c.sections.iter().map(|s| (s.id, s.title_text.as_str(), s.parent_section_id)).collect();
+    assert_eq!(s, vec![(0, "", 0), (1, "В таблице", 0)]);
+    let p: Vec<_> = c.paragraphs.iter().map(|p| (p.section_id, p.text.as_str())).collect();
+    assert_eq!(p, vec![(0, "Лид"), (1, "После")]);
+    // In a nested table, below a level-2 heading in the same table.
+    let t = "Лид\n{|\n|\n== A ==\n{|\n|\n=== B ===\nячейка\n|}\n|}\nПосле";
+    let c = components(t);
+    let s: Vec<_> = c.sections.iter().map(|s| (s.level, s.title_text.as_str(), s.parent_section_id)).collect();
+    assert_eq!(s, vec![(0, "", 0), (2, "A", 0), (3, "B", 1)]);
+    assert_eq!(c.sections[2].heading_start, Some(t.find("=== B").unwrap() as i32));
+    let p: Vec<_> = c.paragraphs.iter().map(|p| (p.section_id, p.text.as_str())).collect();
+    assert_eq!(p, vec![(0, "Лид"), (2, "После")]);
+    // The vendored parser makes headings only in running text and in table cells: in a template parameter
+    // or a tag, `== H ==` is text, so these open no section.
+    for t in ["Текст {{x|1=\n== H ==\nстрока}} после", "Лид<ref>\n== H ==\n</ref> после"] {
+        assert_eq!(components(t).sections.len(), 1, "{t:?}");
+    }
+}
+
+#[test]
+fn list_item_spans_start_at_their_marker_and_end_at_nested_lists() {
+    assert_eq!(spans("* a\n* e"), vec!["* a", "* e"]);
+    assert_eq!(spans("# a  \n## b\n## c\n#* d\n# e"), vec!["# a", "# b", "# c", "* d", "# e"]);
+    assert_eq!(spans("; термин\n: опред\nТекст"), vec!["; термин", ": опред", "Текст"]);
+    // The definition around the nested list has no text of its own.
+    assert_eq!(spans("a\n:* x\n:* y"), vec!["a", "* x", "* y"]);
+}
+
+#[test]
+fn list_ids_count_only_lists_with_paragraphs() {
+    // A list in a table cell has no paragraphs, nor has one whose items have no text. (The vendored parser
+    // makes lists only in running text and in table cells.)
+    let t = "* a\n{|\n|\n* в таблице\n|}\n* {{b}}\n\nТекст\n# c\n{|\n|\n# в таблице\n|}\n# d";
+    assert_eq!(
+        kinds(&components(t).paragraphs),
+        vec![
+            ("list_item", Some(0), Some(1), "a"),
+            ("prose", None, None, "Текст"),
+            ("list_item", Some(1), Some(1), "c"),
+            ("list_item", Some(2), Some(1), "d"),
+        ]
+    );
 }
 
 #[test]
@@ -212,10 +286,9 @@ fn spans_round_trip() {
             assert_eq!(end_char, chars.char_of(end as usize));
             checked += 1;
         }
-        // Paragraphs are in document order and sit inside their section. (They may overlap: a list item's
-        // span is its whole ListItem node, nested lists included.)
+        // Paragraphs are in document order, do not overlap, and sit inside their section.
         for w in c.paragraphs.windows(2) {
-            assert!(w[0].start <= w[1].start, "paragraphs out of order");
+            assert!(w[0].end <= w[1].start, "paragraphs overlap or are out of order");
         }
         for p in &c.paragraphs {
             let s = &c.sections[p.section_id as usize];
@@ -235,7 +308,8 @@ fn depth_limit_and_budget() {
     let t = common::fixture("refs_basic");
     let r = run_with(&t, Limits { walk_budget: 5, fallback: false, ..defaults() });
     assert_eq!(r.page.status, "budget");
-    assert!(r.page.status_detail.unwrap().starts_with("budget: "));
+    let detail = r.page.status_detail.unwrap();
+    assert!(detail.starts_with("budget: walk exceeded its budget (used "), "{detail}");
     assert_eq!(run_with(&t, Limits { walk_budget: 5, ..defaults() }).page.status, "fallback");
 }
 

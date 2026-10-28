@@ -5,8 +5,9 @@
 //!                [--config-dir DIR] [--text-column NAME]
 //!
 //! Prints one TSV line per page version to stdout:
-//! `page_id version n_chars steps parse_ms status walk_nodes walk_depth walk_ms`.
-//! `status` is `ok` or `budget`; the walk columns are `-` when the parse did not finish. The walk runs with
+//! `page_id version n_chars steps parse_ms status walk_nodes walk_depth walk_ms walk_status`.
+//! `status` is the parse's, `ok` or `budget`; `walk_status` is `ok` or the walk's error (`budget (N nodes)`,
+//! `depth_limit (depth N)`). The walk columns are `-` when the parse did not finish. The walk runs with
 //! the default limits and an empty registry. With `--budget 0` the parse has no limit, so rows whose `case`
 //! column says `slow` are skipped (they may never end). `--cases` keeps only rows whose `case`
 //! is in the list. The `case` column is read from the file itself when it has one.
@@ -22,7 +23,7 @@ use wikitext_components::input::{self, Label};
 use wikitext_components::page::{DEFAULT_DEPTH_CAP, DEFAULT_PARSE_BUDGET, DEFAULT_WALK_BUDGET};
 use wikitext_components::registry::Registry;
 use wikitext_components::settings::Settings;
-use wikitext_components::walk::{self, WalkLimits};
+use wikitext_components::walk::{self, WalkError, WalkLimits};
 
 struct Item {
     page_id: String,
@@ -112,10 +113,16 @@ fn main() -> Result<()> {
                 let st = walk::stats(p);
                 let limits = WalkLimits { budget: DEFAULT_WALK_BUDGET, depth_cap: DEFAULT_DEPTH_CAP };
                 let t = Instant::now();
-                let _ = walk::walk(&it.text, p, site, &registry, &limits);
-                format!("{}\t{}\t{:.3}", st.nodes, st.max_depth, t.elapsed().as_secs_f64() * 1000.0)
+                let walked = walk::walk(&it.text, p, site, &registry, &limits);
+                let ms = t.elapsed().as_secs_f64() * 1000.0;
+                let walk_status = match walked {
+                    Ok(_) => "ok".to_string(),
+                    Err(WalkError::Budget { nodes }) => format!("budget ({nodes} nodes)"),
+                    Err(WalkError::DepthLimit { depth }) => format!("depth_limit (depth {depth})"),
+                };
+                format!("{}\t{}\t{:.3}\t{}", st.nodes, st.max_depth, ms, walk_status)
             }
-            Err(_) => "-\t-\t-".to_string(),
+            Err(_) => "-\t-\t-\t-".to_string(),
         };
         drop(res);
         let n_chars = it.text.chars().count();
