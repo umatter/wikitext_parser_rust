@@ -74,7 +74,8 @@ image_option_patterns = [
     "сверхусправа $1", "upright=$1", "upright $1", "$1пкс", "$1px",
 ]
 
-# Magic variables ({{PAGENAME}}) with their Russian aliases.
+# Magic variables ({{PAGENAME}}) with their Russian aliases. "!" and "=" are the magic words {{!}} and {{=}}
+# (MessagesEn.php, MediaWiki 1.24 and later), which stand for "|" and "=".
 variables = [
     "ПУТЬ_К_СТАТЬЕ", "ARTICLEPATH", "ОСНОВА_НАЗВАНИЯ_СТРАНИЦЫ", "BASEPAGENAME", "ОСНОВА_НАЗВАНИЯ_СТРАНИЦЫ_2",
     "BASEPAGENAMEE", "CASCADINGSOURCES", "ЯЗЫК_СОДЕРЖАНИЯ", "CONTENTLANGUAGE", "CONTENTLANG", "ТЕКУЩИЙ_ДЕНЬ",
@@ -106,7 +107,7 @@ variables = [
     "ПРОСТРАНСТВО_СТАТЕЙ_2", "SUBJECTSPACEE", "ARTICLESPACEE", "НАЗВАНИЕ_ПОДСТРАНИЦЫ", "SUBPAGENAME",
     "НАЗВАНИЕ_ПОДСТРАНИЦЫ_2", "SUBPAGENAMEE", "НАЗВАНИЕ_СТРАНИЦЫ_ОБСУЖДЕНИЯ", "TALKPAGENAME",
     "НАЗВАНИЕ_СТРАНИЦЫ_ОБСУЖДЕНИЯ_2", "TALKPAGENAMEE", "ПРОСТРАНСТВО_ОБСУЖДЕНИЙ", "TALKSPACE",
-    "ПРОСТРАНСТВО_ОБСУЖДЕНИЙ_2", "TALKSPACEE", "USERLANGUAGE",
+    "ПРОСТРАНСТВО_ОБСУЖДЕНИЙ_2", "TALKSPACEE", "USERLANGUAGE", "!", "=",
 ]
 
 # Parser function words before the colon ({{lc:x}}, {{#if:x}}), with their Russian aliases.

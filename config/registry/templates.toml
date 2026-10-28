@@ -6,6 +6,8 @@
 #   family          citation kind (web, news, book, journal, encyclopedia, other_template) or note kind
 #   archive_wrapper true for a template that only wraps an archive link ({{webarchive}}, {{wayback}})
 #   site            "wikipedia" or "ruwiki" to limit the entry to one site; absent means both
+#   default_group   footnote and ref_list entries only: the group the template uses when it has no group=
+#                   parameter (absent means the default group ""). Set only where the corpora show it.
 #   [template.fields]  canonical key -> parameter names, in order of preference. Names match
 #                   ParamRow.name exactly: case-sensitive after trimming, so list each case variant needed.
 #                   Positional parameters are named "1", "2", ...
@@ -206,6 +208,10 @@ name = "efn"
 aliases = []
 role = "footnote"
 family = "explanatory"
+# The public corpus: every page version with {{efn}} (3) also has {{комментарии}} and renders its plain refs
+# with a separate {{примечания}}; on one (page 215633) a {{efn|group="К"}} note and default {{efn}} notes
+# share that one {{комментарии}} list, which makes them group К (see комментарии).
+default_group = "К"
 
 [[template]]
 name = "комментарий"
@@ -242,6 +248,9 @@ name = "комментарии"
 aliases = []
 role = "ref_list"
 family = "comments"
+# The public corpus, page 215633: a note in group К ({{efn|group="К"}}) and no list with group=К besides
+# {{комментарии}} (the other list, {{Примечания}}, renders the plain refs).
+default_group = "К"
 
 [[template]]
 name = "недоступная ссылка"
@@ -255,10 +264,9 @@ role = "link_status"
 
 # ---------------------------------------------------------------------------------------------------------
 # Added by Task 15 from the templates found inside refs on the public corpus and the private (Ruwiki)
-# corpus. All of them occur on ru.wikipedia, so none is limited to a site. An alias shares its entry because
-# the corpus uses it the same way (same parameters, same place in the ref); otherwise a name has its own
-# entry. Templates that identify a source are citations; those that only format text inside a ref are
-# `other`.
+# corpus; every name occurs in the corpora. None is limited to a site. An alias shares its entry because the
+# corpus uses it the same way (same parameters, same place in the ref); otherwise a name has its own entry.
+# Templates that identify a source are citations; those that only format text inside a ref are `other`.
 
 [[template]]
 name = "cite web 2"
@@ -483,23 +491,18 @@ role = "citation"
 family = "book"
 
 # Short citations written inside a ref ({{harvnb|Иванов|1990|p=5}}; {{sfn0}} is {{sfn}} without its own
-# ref). They point to a bibliography entry, as {{sfn}} does, but make no footnote and are not a source
-# themselves, so they are `other`; the harv fields are kept for the CITEREF rules.
+# ref). They point to a bibliography entry, as {{sfn}} does, but make no footnote of their own: citations of
+# family short, with the harv fields of the CITEREF rules.
 [[template]]
 name = "harvnb"
 aliases = ["sfn0"]
-role = "other"
+role = "citation"
 family = "short"
 [template.fields]
 harv_names = ["1", "2", "3", "4"]
 harv_ref = ["ref"]
 
 # Text inside refs: separators, abbreviations, language and format markers, links, dates.
-[[template]]
-name = "!"
-aliases = []
-role = "other"
-
 [[template]]
 name = "М."
 aliases = ["М"]

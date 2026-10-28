@@ -16,8 +16,9 @@
 //!   count (MediaWiki). Duplicates are all kept, in source order.
 //! - `ParamRow.start`/`end` is the span the parser reports for the parameter, clamped to the text.
 //! - The parent (`parent_type`, `parent_id`) is the nearest enclosing component, which the walk gives: a
-//!   template (in a name or a parameter value, however deep in links or tags) or a ref. A template inside a
-//!   ref inside a template has the ref as its parent. `depth` counts the templates around it.
+//!   template (in a name or a parameter value, however deep in links or tags), a ref or a `<references>`
+//!   tag. A template inside a ref inside a template has the ref as its parent. `depth` counts the templates
+//!   around it.
 //! - `fp` is over the name and the `name=norm(value_text)` pairs, sorted by name (stable).
 
 use parse_wiki_text_2::{Node, Parameter, Positioned};
@@ -28,7 +29,7 @@ use crate::registry::Registry;
 use crate::settings::Settings;
 use crate::spans::CharIndex;
 
-use super::{Parent, Place};
+use super::{clamp_span, parent_cols, Parent, Place};
 
 struct Open {
     row: usize,
@@ -92,8 +93,7 @@ impl<'t, 's> Templates<'t, 's> {
         place: Place,
         parent: Parent,
     ) -> usize {
-        let len = self.text.len();
-        let (start, end) = (start.min(len), end.min(len).max(start.min(len)));
+        let (start, end) = clamp_span(self.text, start, end);
         let (name_start, name_end) = trimmed_span(self.text, name_nodes);
         let name_raw = self.text.get(name_start..name_end).unwrap_or("");
         // The first colon in the name's own text.
@@ -128,10 +128,7 @@ impl<'t, 's> Templates<'t, 's> {
             .template(&name, self.settings.site())
             .map_or_else(|| "other".to_string(), |e| e.role.clone());
         let depth = self.open.last().map_or(0, |o| self.rows[o.row].depth + 1);
-        let (parent_type, parent_id) = match parent {
-            Some((t, id)) => (Some(t.to_string()), Some(id)),
-            None => (None, None),
-        };
+        let (parent_type, parent_id) = parent_cols(parent);
         let mut params = Vec::new();
         if let Some(c) = split {
             let (a, b) = trim_range(self.text, c + 1, name_end);
@@ -216,15 +213,14 @@ impl<'t, 's> Templates<'t, 's> {
             }
         };
         let (a, b) = trimmed_span(self.text, &p.value);
-        let len = self.text.len();
-        let start = p.start.min(len);
+        let (start, end) = clamp_span(self.text, p.start, p.end);
         let row = ParamRow {
             name,
             positional,
             value_raw: self.text.get(a..b).unwrap_or("").to_string(),
             value_text: std::mem::take(&mut o.pending),
             start: start as i32,
-            end: p.end.min(len).max(start) as i32,
+            end: end as i32,
         };
         self.rows[o.row].params.push(row);
     }

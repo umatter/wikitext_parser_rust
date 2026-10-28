@@ -32,6 +32,8 @@ pub struct TemplateEntry {
     pub archive_wrapper: bool,
     pub fields: BTreeMap<String, Vec<String>>,
     pub site: Option<String>,
+    /// For a footnote or ref-list template: the group it uses when it has no `group=` parameter.
+    pub default_group: Option<String>,
 }
 
 #[derive(Default, Clone, Debug)]
@@ -64,6 +66,7 @@ struct RawTemplate {
     #[serde(default)]
     archive_wrapper: bool,
     site: Option<String>,
+    default_group: Option<String>,
     #[serde(default)]
     fields: BTreeMap<String, Vec<String>>,
 }
@@ -142,6 +145,14 @@ impl Registry {
                 bail!("template \"{}\": unknown site {:?} (one of {})", raw.name, site, SITES.join(", "));
             }
         }
+        if let Some(g) = &raw.default_group {
+            if !matches!(raw.role.as_str(), "footnote" | "ref_list") {
+                bail!("template \"{}\": default_group is only for roles footnote and ref_list, not {:?}", raw.name, raw.role);
+            }
+            if g.trim().is_empty() || g.trim() != g {
+                bail!("template \"{}\": default_group {:?} must be a non-empty, trimmed group name", raw.name, g);
+            }
+        }
         for key in raw.fields.keys() {
             if !FIELD_KEYS.contains(&key.as_str()) {
                 bail!("template \"{}\": unknown field key {:?} (one of {})", raw.name, key, FIELD_KEYS.join(", "));
@@ -177,6 +188,7 @@ impl Registry {
             archive_wrapper: raw.archive_wrapper,
             fields: raw.fields,
             site: raw.site,
+            default_group: raw.default_group,
         });
         Ok(())
     }
@@ -212,9 +224,11 @@ impl Registry {
     }
 
     /// Each template name found inside refs in `outputs`, its count, and whether it has an entry on `site`;
-    /// sorted by count, descending, then by name. A template is inside a ref when its span lies inside the
-    /// span of a ref other than itself: a footnote template (a ref of kind `template`) counts only when it
-    /// sits inside another ref, and what its body holds counts. Templates in a ref list's own markup do not.
+    /// sorted by count, descending, then by name. Only rows of kind `template` count: parser functions,
+    /// modules and magic variables (`{{!}}`) are not templates the registry can list. A template is inside a
+    /// ref when its span lies inside the span of a ref other than itself: a footnote template (a ref of kind
+    /// `template`) counts only when it sits inside another ref, and what its body holds counts. Templates in a
+    /// ref list's own markup do not.
     ///
     /// A method rather than the free function `in_ref_coverage(outputs, site)` of the plan: whether a name
     /// "has a registry entry" needs the registry, and the rows' `role` cannot tell an unlisted template from
@@ -224,7 +238,7 @@ impl Registry {
         for o in outputs {
             let mut spans: Vec<(i32, i32)> = o.components.refs.iter().map(|r| (r.start, r.end)).collect();
             spans.sort_unstable();
-            for t in &o.components.templates {
+            for t in o.components.templates.iter().filter(|t| t.kind == "template") {
                 let before = &spans[..spans.partition_point(|&(s, _)| s <= t.start)];
                 if before.iter().rev().any(|&(s, e)| t.end <= e && (s, e) != (t.start, t.end)) {
                     *counts.entry(t.name.as_str()).or_default() += 1;

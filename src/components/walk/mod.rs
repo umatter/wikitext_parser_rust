@@ -28,9 +28,9 @@
 //! # Parents
 //!
 //! `parent_type` and `parent_id` name the nearest enclosing component of any table. `Walker::parents` holds
-//! the open ones: a template while the walk is inside it, a ref while it is inside the ref's body. A
-//! footnote template is both, the ref innermost, so what it contains belongs to the ref. A ref list is no
-//! parent: what it contains belongs to whatever is around the list.
+//! the open ones: a template while the walk is inside it, a ref while it is inside the ref's body, and a
+//! `<references>` tag (`"ref_list"`) while it is inside the tag. A footnote template is a template and a ref,
+//! the ref innermost, so what it contains belongs to the ref; a ref-list template is a parent as a template.
 
 mod refs;
 mod sections;
@@ -193,8 +193,22 @@ enum Owner {
     Param,
 }
 
-/// The nearest enclosing component: its table (`"template"`, `"ref"`) and id.
+/// The nearest enclosing component: its table (`"template"`, `"ref"`, `"ref_list"`) and id.
 type Parent = Option<(&'static str, i32)>;
+
+/// `parent_type` and `parent_id` of a row.
+fn parent_cols(parent: Parent) -> (Option<String>, Option<i32>) {
+    match parent {
+        Some((table, id)) => (Some(table.to_string()), Some(id)),
+        None => (None, None),
+    }
+}
+
+/// A span the parser reports, clamped into the text: `start <= end <= text.len()`.
+fn clamp_span(text: &str, start: usize, end: usize) -> (usize, usize) {
+    let start = start.min(text.len());
+    (start, end.clamp(start, text.len()))
+}
 
 /// Where a component sits, as the walk meets it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -209,7 +223,7 @@ struct Walker<'t, 's> {
     settings: &'s Settings,
     paras: TextBuilder<'t>,
     templates: Templates<'t, 's>,
-    refs: Refs<'t>,
+    refs: Refs<'t, 's>,
     /// The open components that are parents of what they contain, innermost last (see "Parents").
     parents: Vec<(&'static str, i32)>,
     sections: Sections,
@@ -252,7 +266,7 @@ impl<'t, 's> Walker<'t, 's> {
             settings,
             paras: TextBuilder::new(text, chars),
             templates: Templates::new(text, chars, settings, registry),
-            refs: Refs::new(text, chars),
+            refs: Refs::new(text, chars, registry, settings.site()),
             parents: Vec::new(),
             sections: Sections::new(),
             section: 0,
@@ -465,7 +479,10 @@ impl<'t, 's> Walker<'t, 's> {
                         self.flats.push(Flat::default());
                         c.sink = Sink::Flat(self.flats.len() - 1);
                     }
-                    "references" => self.refs.enter_list_tag(start, end, place, self.parent()),
+                    "references" => {
+                        let id = self.refs.enter_list_tag(start, end, place, self.parent());
+                        self.parents.push(("ref_list", id));
+                    }
                     _ => {}
                 }
             }
@@ -531,7 +548,10 @@ impl<'t, 's> Walker<'t, 's> {
                     self.refs.close_tag(body);
                     self.parents.pop();
                 }
-                "references" => self.refs.close_list(None),
+                "references" => {
+                    self.refs.close_list(None);
+                    self.parents.pop();
+                }
                 _ => {}
             },
             Node::Template { .. } => {

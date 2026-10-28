@@ -205,5 +205,11 @@ fn ruwiki_markup_uses_no_unknown_prefix_or_tag() {
             .into_iter()
             .filter(|u| !allow.contains(u))
             .collect();
-    assert!(unknown.is_empty(), "add to ruwiki.toml: {unknown:?}");
+    // Counts only: the candidates are fragments of Ruwiki markup. They go to a file under the target directory
+    // (never into git), for curating ruwiki.toml or tests/private/prefix_allow.txt.
+    if !unknown.is_empty() {
+        let path = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("ruwiki_unknown_prefixes_and_tags.txt");
+        std::fs::write(&path, unknown.iter().map(|u| format!("{u}\n")).collect::<String>()).unwrap();
+        panic!("{} unknown prefixes or tags in the private corpus; add to ruwiki.toml: see {}", unknown.len(), path.display());
+    }
 }

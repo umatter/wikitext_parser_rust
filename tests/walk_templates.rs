@@ -3,6 +3,7 @@ mod common;
 use common::run_page;
 use wikitext_components::fingerprint::fp;
 use wikitext_components::model::{Components, ParamRow, RefRow, TemplateRow};
+use wikitext_components::registry::Registry;
 use wikitext_components::spans::CharIndex;
 
 fn templates(text: &str) -> Vec<TemplateRow> {
@@ -97,6 +98,15 @@ fn module_parser_function_and_variable_kinds() {
 }
 
 #[test]
+fn pipe_and_equals_magic_words_are_variables() {
+    for site in ["wikipedia", "ruwiki"] {
+        let t = run_page("a{{!}}b{{=}}c", site).components.templates;
+        let v: Vec<_> = t.iter().map(|t| (t.name.as_str(), t.kind.as_str())).collect();
+        assert_eq!(v, vec![("!", "variable"), ("=", "variable")], "{site}");
+    }
+}
+
+#[test]
 fn colon_parameter_span_and_text() {
     let text = "{{ #if: [[a|b]] {{c}} d |y}}";
     let t = templates(text);
@@ -159,134 +169,200 @@ fn fingerprint_ignores_order_and_spacing_of_parameters() {
     assert_ne!(a[0].fp, templates("{{a|x=1|y=3}}")[0].fp);
 }
 
-/// The innermost template or ref whose span contains `start..end` and is larger. A component of the same span
-/// is the component itself or another view of its node (a footnote or ref-list template is also a template
-/// row), never its parent. Of a footnote template's two views around something, the ref is the nearer.
+/// The innermost template, ref or `<references>` tag whose span contains `start..end` and is larger. A
+/// component of the same span is the component itself or another view of its node (a footnote or ref-list
+/// template is also a template row), never its parent. Of a footnote template's two views, the ref is nearer.
 fn innermost(c: &Components, (start, end): (i32, i32)) -> Option<(&'static str, i32)> {
     let templates = c.templates.iter().map(|t| ("template", t.id, t.start, t.end));
     let refs = c.refs.iter().map(|r| ("ref", r.id, r.start, r.end));
+    let lists = c.ref_lists.iter().filter(|l| l.kind == "tag").map(|l| ("ref_list", l.id, l.start, l.end));
     templates
         .chain(refs)
+        .chain(lists)
         .filter(|&(_, _, s, e)| s <= start && end <= e && (s, e) != (start, end))
-        .min_by_key(|&(ty, _, s, e)| (e - s, ty != "ref"))
+        .min_by_key(|&(ty, _, s, e)| (e - s, ["ref", "ref_list", "template"].iter().position(|t| *t == ty)))
         .map(|(ty, id, ..)| (ty, id))
 }
 
-fn assert_parent(c: &Components, what: &str, got: (Option<&str>, Option<i32>), span: (i32, i32), id: i32) {
-    let want = innermost(c, span);
-    assert_eq!(got, (want.map(|w| w.0), want.map(|w| w.1)), "{what} {id}");
+/// One page under check. A failed check on a private page names only the page's index, the table, the row
+/// id and the field: no slice of the text and no value, since those would print Ruwiki markup.
+struct Page<'a> {
+    index: usize,
+    private: bool,
+    text: &'a str,
 }
 
-fn check_page(text: &str, c: &Components, n: &mut [usize; 4]) {
+impl Page<'_> {
+    fn check(&self, ok: bool, table: &str, id: i32, field: &str, detail: impl FnOnce() -> String) {
+        if ok {
+            return;
+        }
+        if self.private {
+            panic!("private page {}: {table} row {id}: {field}", self.index);
+        }
+        panic!("page {}: {table} row {id}: {field}: {}", self.index, detail());
+    }
+
+    /// The span's slice, after checking that it lies on char boundaries and that its char offsets are right.
+    fn span(&self, chars: &CharIndex, table: &str, id: i32, (start, end, start_char, end_char): (i32, i32, i32, i32)) -> &str {
+        let s = self.text.get(start as usize..end as usize);
+        self.check(s.is_some(), table, id, "span on char boundaries", || format!("{start}..{end}"));
+        let want = (chars.char_of(start as usize), chars.char_of(end as usize));
+        self.check((start_char, end_char) == want, table, id, "start_char/end_char", || format!("{:?} {want:?}", (start_char, end_char)));
+        s.unwrap_or("")
+    }
+
+    fn parent(&self, c: &Components, table: &str, id: i32, got: (Option<&str>, Option<i32>), span: (i32, i32)) {
+        let want = innermost(c, span);
+        let want = (want.map(|w| w.0), want.map(|w| w.1));
+        self.check(got == want, table, id, "parent", || format!("{got:?} {want:?}"));
+    }
+}
+
+fn check_page(pg: &Page, c: &Components, reg: &Registry, site: &str, n: &mut [usize; 4]) {
+    let text = pg.text;
     let chars = CharIndex::new(text);
-    let span_ok = |what: &str, start: i32, end: i32, start_char: i32, end_char: i32| -> String {
-        let s = text.get(start as usize..end as usize).unwrap_or_else(|| panic!("{what} span on char boundaries"));
-        assert_eq!((start_char, end_char), (chars.char_of(start as usize), chars.char_of(end as usize)), "{what}");
-        s.to_string()
-    };
     for (i, t) in c.templates.iter().enumerate() {
-        assert_eq!(t.id, i as i32);
-        let s = span_ok("template", t.start, t.end, t.start_char, t.end_char);
-        assert!(s.starts_with("{{"), "{s:?}");
-        assert_parent(c, "template", (t.parent_type.as_deref(), t.parent_id), (t.start, t.end), t.id);
+        let ck = |ok: bool, field: &str, detail: &dyn Fn() -> String| pg.check(ok, "template", t.id, field, detail);
+        ck(t.id == i as i32, "id", &|| format!("{} {i}", t.id));
+        let s = pg.span(&chars, "template", t.id, (t.start, t.end, t.start_char, t.end_char));
+        ck(s.starts_with("{{"), "span starts with {{", &|| format!("{s:?}"));
+        pg.parent(c, "template", t.id, (t.parent_type.as_deref(), t.parent_id), (t.start, t.end));
         let around = c.templates.iter().filter(|o| o.id != t.id && o.start <= t.start && t.end <= o.end).count();
-        assert_eq!(t.depth as usize, around, "depth counts the templates around");
-        assert!(c.sections.get(t.section_id as usize).is_some());
-        assert_eq!(t.para_id.is_some(), t.para_offset.is_some());
+        ck(t.depth as usize == around, "depth counts the templates around", &|| format!("{} {around}", t.depth));
+        ck(c.sections.get(t.section_id as usize).is_some(), "section_id", &|| t.section_id.to_string());
+        ck(t.para_id.is_some() == t.para_offset.is_some(), "para_id with para_offset", &|| format!("{:?} {:?}", t.para_id, t.para_offset));
         n[0] += 1;
         for (i0, p) in t.params.iter().enumerate() {
-            let whole = text.get(p.start as usize..p.end as usize).expect("param span on char boundaries");
-            assert!(t.start <= p.start && p.end <= t.end);
+            let whole = text.get(p.start as usize..p.end as usize);
+            ck(whole.is_some(), "param span on char boundaries", &|| format!("{}..{}", p.start, p.end));
+            let whole = whole.unwrap_or("");
+            ck(t.start <= p.start && p.end <= t.end, "param span inside the template", &|| format!("{}..{}", p.start, p.end));
             // The colon parameter of a module or parser function: exactly its trimmed text. Any
             // other parameter's span holds its value.
             let colon_param = i0 == 0 && matches!(t.kind.as_str(), "module" | "parser_function") && t.name_raw.contains(':');
-            if colon_param {
-                assert_eq!(whole, p.value_raw);
-            } else {
-                assert!(whole.contains(&p.value_raw), "{whole:?} {:?}", p.value_raw);
-            }
-            assert_eq!(p.value_raw, p.value_raw.trim());
-            assert!(!p.value_text.contains("  ") && p.value_text == p.value_text.trim());
+            let holds = if colon_param { whole == p.value_raw } else { whole.contains(&p.value_raw) };
+            ck(holds, "param span holds value_raw", &|| format!("{whole:?} {:?}", p.value_raw));
+            ck(p.value_raw == p.value_raw.trim(), "param value_raw trimmed", &|| format!("{:?}", p.value_raw));
+            ck(!p.value_text.contains("  ") && p.value_text == p.value_text.trim(), "param value_text collapsed", &|| format!("{:?}", p.value_text));
             n[1] += 1;
         }
     }
     let has_body = |r: &RefRow| r.kind != "reuse" && !r.body_raw.is_empty();
+    let template_of = |r: &RefRow| c.templates.iter().find(|t| (t.start, t.end) == (r.start, r.end));
+    let short = |r: &RefRow| {
+        r.kind == "template"
+            && template_of(r).and_then(|t| reg.template(&t.name, site)).is_some_and(|e| e.family.as_deref() == Some("short"))
+    };
     for (i, r) in c.refs.iter().enumerate() {
-        assert_eq!(r.id, i as i32);
-        let s = span_ok("ref", r.start, r.end, r.start_char, r.end_char);
+        let ck = |ok: bool, field: &str, detail: &dyn Fn() -> String| pg.check(ok, "ref", r.id, field, detail);
+        ck(r.id == i as i32, "id", &|| format!("{} {i}", r.id));
+        let s = pg.span(&chars, "ref", r.id, (r.start, r.end, r.start_char, r.end_char));
         if r.kind == "template" {
-            let t = c.templates.iter().find(|t| (t.start, t.end) == (r.start, r.end)).expect("a template ref is a template");
-            assert_eq!(t.role, "footnote");
+            let role = template_of(r).map(|t| t.role.as_str());
+            ck(role == Some("footnote"), "a template ref is a footnote template", &|| format!("{role:?}"));
         } else {
-            assert!(s.get(..4).is_some_and(|h| h.eq_ignore_ascii_case("<ref")) && s.ends_with('>'), "{s:?}");
-            assert!(s.contains(&r.body_raw), "{s:?} {:?}", r.body_raw);
+            let tag = s.get(..4).is_some_and(|h| h.eq_ignore_ascii_case("<ref")) && s.ends_with('>');
+            ck(tag, "span is a <ref> tag", &|| format!("{s:?}"));
         }
-        assert!(["inline", "named", "reuse", "list_defined", "template"].contains(&r.kind.as_str()), "{}", r.kind);
-        assert_eq!(r.body_raw, r.body_raw.trim());
-        assert!(!r.body_text.contains("  ") && r.body_text == r.body_text.trim());
-        assert_parent(c, "ref", (r.parent_type.as_deref(), r.parent_id), (r.start, r.end), r.id);
-        assert!(c.sections.get(r.section_id as usize).is_some());
-        assert_eq!(r.para_id.is_some(), r.para_offset.is_some());
-        assert_eq!(r.name.is_some(), r.name.as_deref() != Some("") && r.name.is_some());
+        ck(s.contains(&r.body_raw), "span holds body_raw", &|| format!("{s:?} {:?}", r.body_raw));
+        ck(["inline", "named", "reuse", "list_defined", "template"].contains(&r.kind.as_str()), "kind", &|| r.kind.clone());
+        ck(r.body_raw == r.body_raw.trim(), "body_raw trimmed", &|| format!("{:?}", r.body_raw));
+        ck(!r.body_text.contains("  ") && r.body_text == r.body_text.trim(), "body_text collapsed", &|| format!("{:?}", r.body_text));
+        ck(!r.body_raw.is_empty() || r.body_text.is_empty(), "no body_text without body_raw", &|| format!("{:?}", r.body_text));
+        pg.parent(c, "ref", r.id, (r.parent_type.as_deref(), r.parent_id), (r.start, r.end));
+        ck(c.sections.get(r.section_id as usize).is_some(), "section_id", &|| r.section_id.to_string());
+        ck(r.para_id.is_some() == r.para_offset.is_some(), "para_id with para_offset", &|| format!("{:?} {:?}", r.para_id, r.para_offset));
+        ck(r.name.as_deref() != Some(""), "name not empty", &String::new);
+        let same_key = |o: &RefRow| (&o.group, &o.name) == (&r.group, &r.name);
         match r.def_ref_id {
             Some(d) => {
                 let d = &c.refs[d as usize];
-                assert!(has_body(d) && d.def_ref_id == Some(d.id));
-                assert_eq!((&d.group, &d.name), (&r.group, &r.name));
+                ck(has_body(d) && d.def_ref_id == Some(d.id), "def_ref_id is a definition", &|| d.id.to_string());
+                ck(same_key(d), "def_ref_id has the same group and name", &|| d.id.to_string());
                 // The first ref with a body for its (group, name).
-                assert!(!c.refs[..d.id as usize].iter().any(|o| has_body(o) && (&o.group, &o.name) == (&d.group, &d.name)));
+                let earlier = c.refs[..d.id as usize].iter().any(|o| has_body(o) && same_key(o));
+                ck(!earlier, "def_ref_id is the first definition", &|| d.id.to_string());
             }
-            None => assert!(r.name.is_none() || !c.refs.iter().any(|o| has_body(o) && (&o.group, &o.name) == (&r.group, &r.name))),
+            None => {
+                let missed = r.name.is_some() && c.refs.iter().any(|o| has_body(o) && same_key(o));
+                ck(!missed, "def_ref_id missing", &String::new);
+            }
         }
-        assert_eq!(r.n_uses.is_some(), r.name.is_some() && matches!(r.kind.as_str(), "named" | "list_defined"));
-        assert_eq!(r.resolved, has_body(r) || r.def_ref_id.is_some());
-        assert_eq!(r.fp.len(), 16);
+        let want_uses = r.name.is_some() && matches!(r.kind.as_str(), "named" | "list_defined");
+        ck(r.n_uses.is_some() == want_uses, "n_uses", &|| format!("{:?}", r.n_uses));
+        ck(r.resolved == (has_body(r) || r.def_ref_id.is_some()), "resolved", &|| r.resolved.to_string());
+        ck(r.fp.len() == 16, "fp", &|| r.fp.clone());
         n[2] += 1;
     }
     for (i, l) in c.ref_lists.iter().enumerate() {
-        assert_eq!(l.id, i as i32);
-        let s = span_ok("ref list", l.start, l.end, l.start_char, l.end_char);
+        let ck = |ok: bool, field: &str, detail: &dyn Fn() -> String| pg.check(ok, "ref list", l.id, field, detail);
+        ck(l.id == i as i32, "id", &|| format!("{} {i}", l.id));
+        let s = pg.span(&chars, "ref list", l.id, (l.start, l.end, l.start_char, l.end_char));
         match (l.kind.as_str(), l.template_id) {
-            ("tag", None) => assert!(s.get(..11).is_some_and(|h| h.eq_ignore_ascii_case("<references")), "{s:?}"),
+            ("tag", None) => {
+                ck(s.get(..11).is_some_and(|h| h.eq_ignore_ascii_case("<references")), "span is a <references> tag", &|| format!("{s:?}"))
+            }
             ("template", Some(t)) => {
                 let t = &c.templates[t as usize];
-                assert_eq!(((t.start, t.end), t.role.as_str()), ((l.start, l.end), "ref_list"));
+                ck((t.start, t.end) == (l.start, l.end) && t.role == "ref_list", "template_id is its ref_list template", &|| t.id.to_string());
             }
-            other => panic!("ref list kind {other:?}"),
+            _ => ck(false, "kind with template_id", &|| format!("{} {:?}", l.kind, l.template_id)),
         }
-        assert_parent(c, "ref list", (l.parent_type.as_deref(), l.parent_id), (l.start, l.end), l.id);
-        assert!(c.sections.get(l.section_id as usize).is_some());
-        let defs = c.refs.iter().filter(|r| r.group == l.group && has_body(r) && r.def_ref_id.is_none_or(|d| d == r.id)).count();
-        assert_eq!(l.n_entries as usize, defs);
+        pg.parent(c, "ref list", l.id, (l.parent_type.as_deref(), l.parent_id), (l.start, l.end));
+        ck(c.sections.get(l.section_id as usize).is_some(), "section_id", &|| l.section_id.to_string());
+        let mut seen = std::collections::HashSet::new();
+        let defs = c
+            .refs
+            .iter()
+            .filter(|r| r.group == l.group && has_body(r) && r.def_ref_id.is_none_or(|d| d == r.id))
+            .filter(|r| !short(r) || seen.insert(wikitext_components::fingerprint::norm(&r.body_text)))
+            .count();
+        ck(l.n_entries as usize == defs, "n_entries", &|| format!("{} {defs}", l.n_entries));
         n[3] += 1;
     }
 }
 
 #[test]
 fn spans_round_trip_on_the_corpus() {
-    let mut texts: Vec<(String, &str)> =
+    let mut texts: Vec<(String, &str, bool)> =
         ["templates", "refs_in_template", "sfn", "efn", "malformed", "refs_basic", "refs_groups_listdefined", "refs_reuse_order"]
             .iter()
-            .map(|f| (common::fixture(f), "wikipedia"))
+            .map(|f| (common::fixture(f), "wikipedia", false))
             .collect();
-    texts.extend(common::public_corpus().into_iter().map(|r| (r.wikitext, "wikipedia")));
+    texts.extend(common::public_corpus().into_iter().map(|r| (r.wikitext, "wikipedia", false)));
     let public = texts.len();
-    // The private corpus too, when present: only assertions, nothing of it is printed or kept.
+    // The private corpus too, when present. Its pages are checked with `private` set, so a failure names only
+    // the page index, the table, the row id and the field; nothing of the markup is printed or kept.
     if let Some(rows) = common::private_corpus("spans_round_trip_on_the_corpus (private part)") {
-        texts.extend(rows.into_iter().map(|r| (r.wikitext, "ruwiki")));
+        texts.extend(rows.into_iter().map(|r| (r.wikitext, "ruwiki", true)));
     }
+    let reg = common::reg();
     let mut n = [0usize; 4];
     let mut public_n = [0usize; 4];
-    for (i, (text, site)) in texts.iter().enumerate() {
+    for (index, (text, site, private)) in texts.iter().enumerate() {
         let c = run_page(text, site).components;
-        check_page(text, &c, &mut n);
-        if i + 1 == public {
+        let index = if *private { index - public } else { index };
+        check_page(&Page { index, private: *private, text }, &c, &reg, site, &mut n);
+        if index + 1 == public && !private {
             public_n = n;
         }
     }
     let [templates, params, refs, lists] = public_n;
     eprintln!("public corpus and fixtures: {templates} templates, {params} parameters, {refs} refs, {lists} ref lists");
     assert!(templates > 1000 && refs > 1000 && lists > 100, "{public_n:?}");
+}
+
+#[test]
+fn private_failures_name_no_values() {
+    let text = "Секрет{{a|b}}";
+    let pg = Page { index: 3, private: true, text };
+    let err = std::panic::catch_unwind(|| pg.check(false, "template", 0, "value", || text.to_string())).unwrap_err();
+    let msg = err.downcast_ref::<String>().cloned().unwrap_or_default();
+    assert_eq!(msg, "private page 3: template row 0: value");
+    let pg = Page { index: 3, private: false, text };
+    let err = std::panic::catch_unwind(|| pg.check(false, "template", 0, "value", || "detail".into())).unwrap_err();
+    assert!(err.downcast_ref::<String>().unwrap().ends_with(": detail"));
 }
 
 #[test]
