@@ -38,6 +38,34 @@ pub struct FreeUrl {
     pub url: String,
 }
 
+/// What `scan` keeps between its calls on one text, which come in text order: where the last run of URL
+/// characters ended, the last search for a comment's end, and the bytes read.
+#[derive(Debug, Default)]
+pub struct Cursor {
+    /// Where the last run ended: a protocol before it starts no URL of its own.
+    pub until: usize,
+    /// The last search for `-->`: from where, and what it found. A comment that does not end in a run's text
+    /// (one cut by a ref's closing tag) is searched to the text's end once, not once per run.
+    comment_end: Option<(usize, Option<usize>)>,
+    /// The bytes read by the runs and the searches for `-->`: a test bound (`fallback::scan_work`).
+    pub read: u64,
+}
+
+impl Cursor {
+    /// The first `-->` at or after `from`, from the last search when it can answer.
+    fn comment_end(&mut self, text: &str, from: usize) -> Option<usize> {
+        if let Some((asked, found)) = self.comment_end {
+            if from >= asked && found.is_none_or(|f| f >= from) {
+                return found;
+            }
+        }
+        let found = text.get(from..).and_then(|r| r.find("-->")).map(|k| from + k);
+        self.read += (found.unwrap_or(text.len()).saturating_sub(from)) as u64;
+        self.comment_end = Some((from, found));
+        found
+    }
+}
+
 /// A letter, a digit or `_`: what `\b` separates from other characters.
 fn is_word(c: char) -> bool {
     c.is_alphanumeric() || c == '_'
@@ -70,21 +98,21 @@ fn protocol_at(text: &str, at: usize, settings: &Settings) -> Option<usize> {
         .max()
 }
 
-/// The free URLs whose protocol starts in `from..to`, at or after `*until`, appended to `out` in order.
-/// `*until` is where the last run ended, and moves past each run found. `in_template`: the text is a template
-/// parameter's value, which `|` and `}}` end.
+/// The free URLs whose protocol starts in `from..to`, at or after `cursor.until`, appended to `out` in order.
+/// `cursor.until` is where the last run ended, and moves past each run found. `in_template`: the text is a
+/// template parameter's value, which `|` and `}}` end.
 pub fn scan(
     text: &str,
     settings: &Settings,
     from: usize,
     to: usize,
     in_template: bool,
-    until: &mut usize,
+    cursor: &mut Cursor,
     out: &mut Vec<FreeUrl>,
 ) {
     let b = text.as_bytes();
     let to = to.min(text.len());
-    let mut i = from.max(*until);
+    let mut i = from.max(cursor.until);
     while i < to {
         if !b[i].is_ascii_alphabetic() {
             i += 1;
@@ -95,9 +123,9 @@ pub fn scan(
             i += 1;
             continue;
         };
-        match run(text, i, plen, in_template) {
+        match run(text, i, plen, in_template, cursor) {
             Some((end, url)) => {
-                *until = end;
+                cursor.until = end;
                 if let Some(u) = finish(text, i, plen, &url) {
                     out.push(u);
                 }
@@ -110,7 +138,13 @@ pub fn scan(
 
 /// The run of URL characters after the protocol at `start`: where it ends in the source, and its pieces
 /// (source spans without comments). `None` without an address character.
-fn run(text: &str, start: usize, plen: usize, in_template: bool) -> Option<(usize, Vec<(usize, usize)>)> {
+fn run(
+    text: &str,
+    start: usize,
+    plen: usize,
+    in_template: bool,
+    cursor: &mut Cursor,
+) -> Option<(usize, Vec<(usize, usize)>)> {
     let b = text.as_bytes();
     let mut pos = start + plen;
     if b.get(pos) == Some(&b'[') {
@@ -126,9 +160,9 @@ fn run(text: &str, start: usize, plen: usize, in_template: bool) -> Option<(usiz
         let rest = &text[pos..];
         if rest.starts_with("<!--") {
             pieces.push((piece, pos));
-            match rest[4..].find("-->") {
+            match cursor.comment_end(text, pos + 4) {
                 Some(k) => {
-                    pos += 4 + k + 3;
+                    pos = k + 3;
                     piece = pos;
                     continue;
                 }
@@ -148,6 +182,7 @@ fn run(text: &str, start: usize, plen: usize, in_template: bool) -> Option<(usiz
         }
     }
     pieces.push((piece, pos));
+    cursor.read += (pos - start) as u64;
     let len: usize = pieces.iter().map(|(a, b)| b - a).sum();
     (len > plen).then_some((pos, pieces))
 }
@@ -181,4 +216,27 @@ fn finish(text: &str, start: usize, plen: usize, pieces: &[(usize, usize)]) -> O
         left -= b - a;
     }
     Some(FreeUrl { start, end, url })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A comment cut by a ref's closing tag right after each free URL has no `-->` in the run: its search reads
+    /// the rest of the text once, not once per URL (once per URL took 3.9 s at 540 KB, on both paths).
+    #[test]
+    fn a_comment_end_is_searched_for_once() {
+        let s = Settings::load(std::path::Path::new("config/sites/ru.wikipedia.toml")).unwrap();
+        let unit = "<ref>http://a.ru<!-- </ref>";
+        let n = 20_000;
+        let text = unit.repeat(n);
+        let (mut cursor, mut out) = (Cursor::default(), Vec::new());
+        for k in 0..n {
+            let body = k * unit.len() + "<ref>".len();
+            scan(&text, &s, body, body + "http://a.ru".len(), false, &mut cursor, &mut out);
+        }
+        assert_eq!(out.len(), n);
+        assert!(out.iter().all(|u| u.url == "http://a.ru"));
+        assert!(cursor.read <= 2 * text.len() as u64, "{} bytes read on {}", cursor.read, text.len());
+    }
 }

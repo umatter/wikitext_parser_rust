@@ -321,8 +321,8 @@ struct Walker<'t, 's> {
     /// `<pre>` tags open: the parser reads `<pre>` as an HTML tag, MediaWiki its content as raw text, where no
     /// free URL is a link.
     pre: usize,
-    /// Where the last run of URL characters ended (`autolink::scan`).
-    free_until: usize,
+    /// What `autolink::scan` keeps between its calls.
+    free_cursor: autolink::Cursor,
 }
 
 impl<'t, 's> Walker<'t, 's> {
@@ -358,7 +358,7 @@ impl<'t, 's> Walker<'t, 's> {
             lists: 0,
             after_link: None,
             pre: 0,
-            free_until: 0,
+            free_cursor: autolink::Cursor::default(),
         }
     }
 
@@ -397,7 +397,7 @@ impl<'t, 's> Walker<'t, 's> {
     /// The free URLs whose protocol starts in the text `from..to` become events (R73).
     fn free_urls(&mut self, from: usize, to: usize, in_template: bool) {
         let mut found = Vec::new();
-        autolink::scan(self.text, self.settings, from, to, in_template, &mut self.free_until, &mut found);
+        autolink::scan(self.text, self.settings, from, to, in_template, &mut self.free_cursor, &mut found);
         for u in found {
             let place = self.place();
             self.collect.free_url((u.start, u.end), &u.url, place);

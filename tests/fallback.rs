@@ -133,35 +133,61 @@ fn depth_limit_falls_back_with_templates() {
     assert_eq!(o.components.refs.len(), 1);
 }
 
-#[test]
-fn linear_time_on_adversarial_input() {
-    let t = "{{a|".repeat(200_000) + &"[[".repeat(200_000) + &"<ref>".repeat(100_000);
+/// The scanner's work on `text` (`fallback::scan_work`: the steps of its passes, the items they visit and the
+/// bytes they read), which, unlike its time, does not depend on the machine or its load. A generous clock
+/// backstop only makes a hang fail.
+fn work(text: &str) -> u64 {
     let s = std::time::Instant::now();
-    let _ = fallback::scan(&t, &ru(), &reg());
-    assert!(s.elapsed().as_secs_f64() < 2.0);
+    let (_, w) = fallback::scan_work(text, &ru(), &reg());
+    let secs = s.elapsed().as_secs_f64();
+    assert!(secs < 30.0, "{secs} s on {} bytes ({:?}...)", text.len(), text.get(..20).unwrap_or(text));
+    w
 }
 
+/// The work allowed per byte of input: about twice what the inputs below need (at most 4.1 per byte, on the
+/// regions cut by dropped elements).
+const WORK_PER_BYTE: u64 = 8;
+
+type Case = (&'static str, usize, fn(usize) -> String);
+
+/// Adversarial inputs, each made at a size `n` (`n` repetitions of its unit, give or take a constant).
+const ADVERSARIAL: &[Case] = &[
+    ("templates, links and refs left open", 100_000, |n| "{{a|".repeat(n) + &"[[".repeat(n) + &"<ref>".repeat(n / 2)),
+    ("ref tags never ended", 50_000, |n| "<ref name=a ".repeat(n)),
+    ("skipped regions never closed", 50_000, |n| "<nowiki>".repeat(n) + &"<pre>".repeat(n)),
+    ("links left open", 100_000, |n| "[[a|".repeat(n)),
+    ("external links left open", 50_000, |n| "[http://a.ru ".repeat(n) + "\n"),
+    ("parameters closed as templates", 100_000, |n| "{{{".repeat(n) + &"}}".repeat(n)),
+    ("stray closers", 50_000, |n| "</ref>{{a|b=".repeat(n)),
+    ("headings in templates left open", 50_000, |n| "== a {{b ==\n".repeat(n)),
+    ("refs after deep templates", 50_000, |n| "{{a|".repeat(300) + &"}}".repeat(300) + &"<ref>x</ref>".repeat(n)),
+    // A region's closing tag searched for again each time an element that would cut it is dropped: the
+    // quadratic search took 41 s and 35 s on these at n = 40,000 (1.8 MB and 1.6 MB).
+    ("nowiki regions cut by dropped elements", 20_000, |n| {
+        "{{a|<ref><nowiki>}}{{a|<references><nowiki>}}".repeat(n) + "</references></ref>"
+    }),
+    ("pre regions cut by dropped elements", 20_000, |n| {
+        "{{a|<ref><pre>}}{{a|<references><pre>}}".repeat(n) + "</references></ref>"
+    }),
+    // Each parameter value was read past every unclosed item after it: 24 s at n = 40,000 (240 KB), 216 s at
+    // 80,000. A heading line is such an item, so each heading's title was read past the headings after it.
+    ("parameters before unclosed links", 10_000, |n| "{{a".to_string() + &"|p".repeat(n) + "}}" + &"[[a|".repeat(n)),
+    ("headings", 10_000, |n| "== a ==\n".repeat(n)),
+    // A free URL's comment that a ref's closing tag cuts: its `-->` was searched for to the text's end once per
+    // URL, 3.7 s at n = 20,000 (540 KB).
+    ("comments cut by ref ends after free URLs", 5_000, |n| "<ref>http://a.ru<!-- </ref>".repeat(n)),
+];
+
+/// Linear work on adversarial inputs: doubling an input multiplies the work by at most 2.25 (a quadratic loop
+/// quadruples it), and the work stays within `WORK_PER_BYTE` per byte.
 #[test]
-fn linear_time_on_other_adversarial_inputs() {
-    let cases = [
-        "<ref name=a ".repeat(100_000),
-        "<nowiki>".repeat(100_000) + &"<pre>".repeat(100_000),
-        "[[a|".repeat(200_000),
-        "[http://a.ru ".repeat(100_000) + "\n",
-        "{{{".repeat(200_000) + &"}}".repeat(200_000),
-        "</ref>{{a|b=".repeat(100_000),
-        "== a {{b ==\n".repeat(100_000),
-        "{{a|".repeat(300) + &"}}".repeat(300) + &"<ref>x</ref>".repeat(100_000),
-        // A region's closing tag searched for again each time an element that would cut it is dropped: the
-        // quadratic search took 41 s and 35 s on these (1.8 MB and 1.6 MB).
-        "{{a|<ref><nowiki>}}{{a|<references><nowiki>}}".repeat(40_000) + "</references></ref>",
-        "{{a|<ref><pre>}}{{a|<references><pre>}}".repeat(40_000) + "</references></ref>",
-    ];
-    for t in &cases {
-        let s = std::time::Instant::now();
-        let _ = fallback::scan(t, &ru(), &reg());
-        let secs = s.elapsed().as_secs_f64();
-        assert!(secs < 2.0, "{secs} s on {:?}...", &t[..20]);
+fn linear_work_on_adversarial_inputs() {
+    for &(name, n, make) in ADVERSARIAL {
+        let (a, b) = (make(n), make(2 * n));
+        let (wa, wb) = (work(&a), work(&b));
+        eprintln!("{name}: {wa} at {} bytes, {wb} at {} bytes", a.len(), b.len());
+        assert!(4 * wb <= 9 * wa, "{name}: work {wa} at {} bytes, {wb} at {} bytes: not linear", a.len(), b.len());
+        assert!(wb <= WORK_PER_BYTE * b.len() as u64, "{name}: work {wb} on {} bytes", b.len());
     }
 }
 

@@ -25,9 +25,9 @@ fn column(path: &Path, name: &str) -> Vec<String> {
     out
 }
 
-#[test]
-fn hanging_page_is_quarantined_then_marked_hang_on_resume() {
-    let d = std::env::temp_dir().join(format!("wtc_watchdog_{}", std::process::id()));
+/// A fresh directory holding `hangs.parquet`: three pages, page_id 1 to 3, texts "a", "b" and "c".
+fn three_pages(name: &str) -> std::path::PathBuf {
+    let d = std::env::temp_dir().join(format!("wtc_watchdog_{name}_{}", std::process::id()));
     let _ = fs::remove_dir_all(&d);
     fs::create_dir_all(&d).unwrap();
     let input = d.join("hangs.parquet");
@@ -42,7 +42,13 @@ fn hanging_page_is_quarantined_then_marked_hang_on_resume() {
     let mut w = ArrowWriter::try_new(File::create(&input).unwrap(), schema, None).unwrap();
     w.write(&batch).unwrap();
     w.close().unwrap();
+    d
+}
 
+#[test]
+fn hanging_page_is_quarantined_then_marked_hang_on_resume() {
+    let d = three_pages("hang");
+    let input = d.join("hangs.parquet");
     let out = d.join("out");
     let base = [
         "--input", input.to_str().unwrap(), "--label", "text=wikipedia:v", "--out", out.to_str().unwrap(),
@@ -77,5 +83,32 @@ fn hanging_page_is_quarantined_then_marked_hang_on_resume() {
     assert_eq!(column(&pages, "page_id"), ["1", "2", "3"]);
     let detail = column(&out.join("pages").join("hangs.parquet"), "status_detail");
     assert!(detail[1].starts_with("hang: "), "{}", detail[1]);
+    let _ = fs::remove_dir_all(&d);
+}
+
+/// A quarantined page runs watched too: the fallback scan `--resume` gives it is work the watchdog bounds. The
+/// test hook makes page 2 run past the limit, here in its quarantined run.
+#[test]
+fn quarantined_page_runs_watched() {
+    let d = three_pages("quarantined");
+    let input = d.join("hangs.parquet");
+    let out = d.join("out");
+    fs::create_dir_all(&out).unwrap();
+    fs::write(out.join("quarantine.list"), "hangs\t1\ttext\n").unwrap();
+    let run = Command::new(BIN)
+        .args(["--input", input.to_str().unwrap(), "--label", "text=wikipedia:v", "--out", out.to_str().unwrap()])
+        .args(["--jobs", "2", "--resume"])
+        .env("WIKITEXT_WATCHDOG_SECS", "1")
+        .env("WIKITEXT_TEST_SLEEP_PAGE", "2")
+        .output()
+        .unwrap();
+    assert!(!run.status.success(), "the watchdog must abort a quarantined page over the limit");
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        assert_eq!(run.status.signal(), Some(6), "aborted with SIGABRT");
+    }
+    assert!(String::from_utf8_lossy(&run.stderr).contains("watchdog: page hangs 1 text"));
+    assert!(!out.join("pages").join("hangs.parquet").exists(), "an aborted input has no finished part");
     let _ = fs::remove_dir_all(&d);
 }

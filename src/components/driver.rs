@@ -349,14 +349,15 @@ impl Engine<'_> {
     fn page(&self, p: &PageInput) -> (PageOutput, f64) {
         let settings = self.sites.get(&p.key.site).expect("label sites are checked before any page");
         let t = Instant::now();
+        // Every page runs watched, a quarantined one too: its fallback scan is work as well.
+        let _watch = self.watchdog.map(|w| w.watch(&p.key));
+        #[cfg(feature = "test-hooks")]
+        if std::env::var("WIKITEXT_TEST_SLEEP_PAGE").ok().as_deref() == Some(p.key.page_id.as_str()) {
+            std::thread::sleep(watchdog_limit() * 2 + Duration::from_secs(5));
+        }
         let out = if !self.quarantined.is_empty() && self.quarantined.contains(&quarantine_line(&p.key)) {
             page::hang_page(p, settings, self.registry, self.limits)
         } else {
-            let _watch = self.watchdog.map(|w| w.watch(&p.key));
-            #[cfg(feature = "test-hooks")]
-            if std::env::var("WIKITEXT_TEST_SLEEP_PAGE").ok().as_deref() == Some(p.key.page_id.as_str()) {
-                std::thread::sleep(watchdog_limit() * 2 + Duration::from_secs(5));
-            }
             page::process_page(p, settings, self.registry, self.limits)
         };
         (out, t.elapsed().as_secs_f64())

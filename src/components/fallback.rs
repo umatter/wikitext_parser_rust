@@ -54,7 +54,10 @@
 //! namespace is read once), an extension tag up to its `>` or the next `<`, a heading line, a comment. The
 //! searches that are not keep what they found and only move forward: the `>` that ends an HTML tag, and the
 //! closing tags of the text (`Closers`), read once and kept by name with a cursor per name, which answer
-//! where a skipped region ends and whether an open element's closing tag cuts it first.
+//! where a skipped region ends and whether an open element's closing tag cuts it first. The pass that emits
+//! the rows reads a range (a parameter value, a ref's body) by the items that start inside it and stops at its
+//! end, so each item is visited by the ranges it is in, not by every range before it. `scan_work` counts the
+//! work of both passes, and the tests bound it linearly in the input's length.
 //!
 //! # Places
 //!
@@ -84,7 +87,7 @@
 //! link without a label adds its target. It is read only when the citations collector keeps it, in a ref's
 //! body.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 
 use parse_wiki_text_2::Node;
@@ -110,16 +113,24 @@ const MAX_MAGIC_WORD: usize = 80;
 /// The sections, refs, ref lists, templates and citations of `text`, from one linear pass over it. Every row has
 /// `fallback = true`; there are no paragraphs.
 pub fn scan(text: &str, settings: &Settings, registry: &Registry) -> Components {
+    scan_work(text, settings, registry).0
+}
+
+/// `scan`, with the scanner's work: the steps of its main loop, the bytes its lookaheads read, the items the
+/// emitting pass visits and the bytes it reads. A test bound (`tests/fallback.rs`): it is linear in the input's
+/// length on every input, which a clock cannot check on a loaded machine.
+#[doc(hidden)]
+pub fn scan_work(text: &str, settings: &Settings, registry: &Registry) -> (Components, u64) {
     let mut s = Scanner::new(text, settings);
     s.run();
     let chars = CharIndex::new(text);
-    let mut c = s.emit(&chars, registry);
+    let (mut c, work) = s.emit(&chars, registry);
     c.sections.iter_mut().for_each(|r| r.fallback = true);
     c.templates.iter_mut().for_each(|r| r.fallback = true);
     c.refs.iter_mut().for_each(|r| r.fallback = true);
     c.ref_lists.iter_mut().for_each(|r| r.fallback = true);
     c.citations.iter_mut().for_each(|r| r.fallback = true);
-    c
+    (c, work)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -295,6 +306,8 @@ struct Scanner<'t, 's> {
     entities: RefCell<HashMap<String, Option<char>>>,
     /// Magic words by source (`__TOC__`), as the parser reads them.
     magic_words: RefCell<HashMap<String, bool>>,
+    /// The work done so far (`scan_work`).
+    work: Cell<u64>,
 }
 
 /// ASCII whitespace as the parser skips it.
@@ -362,7 +375,13 @@ impl<'t, 's> Scanner<'t, 's> {
             gt: None,
             entities: RefCell::new(HashMap::new()),
             magic_words: RefCell::new(HashMap::new()),
+            work: Cell::new(0),
         }
+    }
+
+    /// Counts `n` units of work: steps, items visited or bytes read.
+    fn tick(&self, n: usize) {
+        self.work.set(self.work.get() + n as u64);
     }
 
     fn at(&self, i: usize) -> u8 {
@@ -482,6 +501,7 @@ impl<'t, 's> Scanner<'t, 's> {
         let n = self.b.len();
         let (mut i, mut line_start) = (0, true);
         while i < n {
+            self.tick(1);
             if line_start {
                 line_start = false;
                 if self.b[i] == b'=' && !self.full() {
@@ -630,6 +650,7 @@ impl<'t, 's> Scanner<'t, 's> {
         let t = skip_ws_forwards(b, i + 2);
         let mut j = t;
         loop {
+            self.tick(1);
             match b.get(j) {
                 None | Some(b'\n' | b'[' | b'{' | b'}') => return i + 1,
                 Some(b']') if self.at(j + 1) == b']' => {
@@ -673,16 +694,20 @@ impl<'t, 's> Scanner<'t, 's> {
             if let Some((list, cursor)) = self.closers.by_name.get_mut(name) {
                 while *cursor < list.len() && list[*cursor].0 < from {
                     *cursor += 1;
+                    self.work.set(self.work.get() + 1);
                 }
                 if let Some(&c) = list.get(*cursor) {
                     return Some(c);
                 }
             }
             // Read on to the next closing tag of any name; past the last one, every answer is `None`.
-            let Some(p) = find(self.b, self.closers.scanned.max(from), b"</") else {
+            let at = self.closers.scanned.max(from);
+            let Some(p) = find(self.b, at, b"</") else {
+                self.tick(self.b.len().saturating_sub(at));
                 self.closers.scanned = self.b.len();
                 return None;
             };
+            self.tick(p + 2 - at);
             self.closers.scanned = p + 2;
             if let Some((n, end)) = self.plain_closer(p) {
                 self.closers.by_name.entry(n).or_default().0.push((p, end));
@@ -701,6 +726,7 @@ impl<'t, 's> Scanner<'t, 's> {
             open.extend(self.tags.iter().filter(|(_, &c)| c > 0).map(|(n, _)| n.clone()));
             open.extend(self.ghost_tags.iter().filter(|(_, &c)| c > 0).map(|(n, _)| n.clone()));
         }
+        self.tick(open.len());
         for n in open {
             if self.closer_of(&n, from).is_some_and(|(p, _)| p < own.0) {
                 return None;
@@ -715,6 +741,7 @@ impl<'t, 's> Scanner<'t, 's> {
         let b = self.b;
         let mut k = i + 4;
         while k < b.len() {
+            self.tick(1);
             match b[k] {
                 b'-' if b[k..].starts_with(b"-->") => return k + 3,
                 b'<' if self.open_tags > 0 && self.at(k + 1) == b'/' => match self.plain_closer(k) {
@@ -734,10 +761,12 @@ impl<'t, 's> Scanner<'t, 's> {
         let ns = k + 2;
         let mut j = ns;
         loop {
+            self.tick(1);
             match b.get(j) {
                 None | Some(b'/' | b'<') => return None,
                 Some(b'\t' | b'\n' | b' ') => {
                     let q = skip_ws_forwards(b, j + 1);
+                    self.tick(q - j);
                     return (b.get(q) == Some(&b'>')).then(|| (self.text[ns..j].to_ascii_lowercase(), q + 1));
                 }
                 Some(b'>') => return Some((self.text[ns..j].to_ascii_lowercase(), j + 1)),
@@ -765,6 +794,7 @@ impl<'t, 's> Scanner<'t, 's> {
             }
         }
         let found = self.b.get(from..)?.iter().position(|&c| c == b'>').map(|p| from + p);
+        self.tick(found.unwrap_or(self.b.len()) - from);
         self.gt = Some((from, found));
         found
     }
@@ -780,6 +810,7 @@ impl<'t, 's> Scanner<'t, 's> {
         let ns = i + 1 + usize::from(closing);
         let mut j = ns;
         while j < b.len() && !matches!(b[j], b'\t' | b'\n' | b' ' | b'/' | b'>') {
+            self.tick(1);
             if j - ns >= MAX_TAG_NAME {
                 return i + 1;
             }
@@ -794,7 +825,11 @@ impl<'t, 's> Scanner<'t, 's> {
         // comes first.
         let gt = match class {
             TagClass::Html => self.next_gt(j),
-            TagClass::Extension => b[j..].iter().position(|&c| c == b'>' || c == b'<').map(|p| j + p).filter(|&p| b[p] == b'>'),
+            TagClass::Extension => {
+                let stop = b[j..].iter().position(|&c| c == b'>' || c == b'<').map(|p| j + p);
+                self.tick(stop.unwrap_or(b.len()) - j);
+                stop.filter(|&p| b[p] == b'>')
+            }
         };
         let Some(gt) = gt else { return i + 1 };
         let open_end = gt + 1;
@@ -898,6 +933,7 @@ impl<'t, 's> Scanner<'t, 's> {
         let close = it.end - 2;
         let mut pipes: Vec<(usize, Option<usize>)> = Vec::new();
         let mut colon = None;
+        self.tick(it.seps.len());
         for &(p, c) in &it.seps {
             match c {
                 b'|' => pipes.push((p, None)),
@@ -959,8 +995,10 @@ impl<'t, 's> Scanner<'t, 's> {
         while pos < end {
             while k < it.next && !self.items[k].closed {
                 k += 1;
+                self.tick(1);
             }
             let stop = if k < it.next { self.items[k].start.min(end) } else { end };
+            self.tick(1 + stop.saturating_sub(pos));
             if let Some(w) = self.text[pos..stop].find(char::is_whitespace) {
                 return Some(pos + w);
             }
@@ -978,17 +1016,24 @@ impl<'t, 's> Scanner<'t, 's> {
     /// parameters `{{{…}}}`, comments, raw or muted regions or HTML tags, as the walk reads them.
     fn free_urls(&self) -> Vec<FreeUrl> {
         let mut out = Vec::new();
-        let mut until = 0;
-        self.free_in(0, self.text.len(), false, &mut until, &mut out);
+        let mut cursor = autolink::Cursor::default();
+        self.free_in(0, self.text.len(), false, &mut cursor, &mut out);
+        self.tick(cursor.read as usize);
         out
     }
 
     /// The free URLs of `a..b`, whose elements start at or after `a`; `in_template`: a parameter value.
-    fn free_in(&self, a: usize, b: usize, in_template: bool, until: &mut usize, out: &mut Vec<FreeUrl>) {
+    fn free_in(&self, a: usize, b: usize, in_template: bool, cursor: &mut autolink::Cursor, out: &mut Vec<FreeUrl>) {
         let mut k = self.items.partition_point(|it| it.start < a);
         let mut pos = a;
         while pos < b {
+            self.tick(1);
+            // Up to the next closed item at or after `pos`; the items from `b` on are outside the range.
             while let Some(it) = self.items.get(k) {
+                if it.start >= b {
+                    break;
+                }
+                self.tick(1);
                 match (it.closed, it.start < pos) {
                     (false, _) => k += 1,
                     (true, true) => k = it.next,
@@ -997,7 +1042,8 @@ impl<'t, 's> Scanner<'t, 's> {
             }
             let next = self.items.get(k).map_or(b, |it| it.start.min(b));
             if pos < next {
-                autolink::scan(self.text, self.settings, pos, next, in_template, until, out);
+                self.tick(next - pos);
+                autolink::scan(self.text, self.settings, pos, next, in_template, cursor, out);
             }
             if next >= b {
                 break;
@@ -1006,11 +1052,11 @@ impl<'t, 's> Scanner<'t, 's> {
             match it.kind {
                 Kind::Template => {
                     for (_, value, _) in self.layout(it).params {
-                        self.free_in(value.0, value.1, true, until, out);
+                        self.free_in(value.0, value.1, true, cursor, out);
                     }
                 }
                 Kind::Ref | Kind::RefList | Kind::Tag { muted: false } => {
-                    self.free_in(it.inner.0, it.inner.1, false, until, out);
+                    self.free_in(it.inner.0, it.inner.1, false, cursor, out);
                 }
                 _ => {}
             }
@@ -1033,7 +1079,13 @@ impl<'t, 's> Scanner<'t, 's> {
         // Where the content of an element being read ends, and the length of its closer; innermost last.
         let mut ends: Vec<(usize, usize)> = Vec::new();
         while pos < b {
+            self.tick(1);
+            // Up to the next closed item at or after `pos`; the items from `b` on are outside the range.
             while let Some(it) = self.items.get(k) {
+                if it.start >= b {
+                    break;
+                }
+                self.tick(1);
                 match (it.closed, it.start < pos) {
                     (false, _) => k += 1,
                     (true, true) => k = it.next,
@@ -1044,6 +1096,7 @@ impl<'t, 's> Scanner<'t, 's> {
             let next_end = ends.last().map_or(usize::MAX, |e| e.0);
             let stop = b.min(next_item).min(next_end);
             if pos < stop {
+                self.tick(stop - pos);
                 self.plain(&mut out, pos, stop);
                 pos = stop;
             }
@@ -1057,6 +1110,7 @@ impl<'t, 's> Scanner<'t, 's> {
             let it = &self.items[k];
             match it.kind {
                 Kind::Raw if !label => {
+                    self.tick(it.inner.1 - it.inner.0);
                     out.push(&self.text[it.inner.0..it.inner.1]);
                     (pos, k) = (it.end, it.next);
                 }
@@ -1170,7 +1224,8 @@ impl<'t, 's> Scanner<'t, 's> {
     }
 
     /// The events of what the pass found, in document order, into the walk's builders.
-    fn emit(self, chars: &CharIndex, registry: &Registry) -> Components {
+    /// Also returns the work of the whole scan (`scan_work`).
+    fn emit(self, chars: &CharIndex, registry: &Registry) -> (Components, u64) {
         struct Open {
             item: usize,
             end: usize,
@@ -1184,6 +1239,7 @@ impl<'t, 's> Scanner<'t, 's> {
         let mut paras = Paras::default();
         let free = self.free_urls();
         loop {
+            self.tick(1);
             let head = self.heads.get(h).map(|x| x.start);
             let item = self.items.get(k).map(|x| x.start);
             let url = free.get(f).map(|u| u.start);
@@ -1264,6 +1320,6 @@ impl<'t, 's> Scanner<'t, 's> {
                 paras.counted = paras.counted.max(it.end);
             }
         }
-        collect.finish(|_| (None, None))
+        (collect.finish(|_| (None, None)), self.work.get())
     }
 }
