@@ -26,7 +26,8 @@
 //!   no archive URL), unless the row has an archive already (then it adds nothing), and gives the row its original as `url` when the row has none. A wrapper inside a
 //!   citation template's parameter merges into that template's row. With nothing before it, it is a
 //!   standalone row of the wrapper's family with the original as `url`.
-//! - A `link_status` template sets `dead_link` on every row of its body.
+//! - A `link_status` template sets `dead_link` on every row of its body. So does, on its own row, a citation
+//!   template's CS1 dead-link parameter (R77, `url_dead`).
 //! - A ref body with no row yields one `plain_text` row, at the ref's position, with `text = body_text`.
 //!
 //! # Fields
@@ -38,6 +39,8 @@
 //! - `authors` collects, in source order, every parameter whose name (without trailing digits) is a base of
 //!   the entry's `authors` list: `last`+`first` of one number as `"last, first"`; a `first` alone is none.
 //! - `year` is the `year` field, else the first 4-digit run between 1000 and 2100 in `date_raw`.
+//! - `dead_link` (R77): the `url_status` field, read as a scalar field (`url-status=dead`, `deadlink=yes`), is
+//!   `dead`, or a yes-word for a deadlink-style parameter (`url_dead`).
 //! - `template_id`, `template_name` and `params` are the template's; `harv_key` follows the CITEREF rules below.
 //!
 //! # CITEREF keys (`harv_key`)
@@ -128,7 +131,7 @@ pub(super) struct Citations<'t, 's> {
     /// The body out of refs.
     page: Body,
     open: Vec<OpenCite>,
-    /// Slots of the bodies that had a dead-link template.
+    /// Slots of the bodies that had a dead-link template (`link_status`).
     dead: HashSet<usize>,
 }
 
@@ -224,6 +227,24 @@ fn harv_key(row: &CitationRow, t: &TemplateRow, e: &TemplateEntry) -> Option<Str
         (false, Some(y)) => Some(citeref(&names, y)),
         _ => None,
     }
+}
+
+/// The values of a deadlink-style parameter that mark the URL dead (`deadlink=yes`).
+const YES_WORDS: &[&str] = &["yes", "y", "true", "да"];
+
+/// A parameter of the `url-status` form, whose values are words (`dead`, `live`, `unfit`, `usurped`,
+/// `deviated`), not yes or no.
+fn is_status_form(name: &str) -> bool {
+    name.to_lowercase().contains("status")
+}
+
+/// Whether a citation template's CS1 dead-link parameter (registry field `url_status`) marks its URL dead: the
+/// field's value, trimmed and lowercased, is `dead`, or a yes-word for a deadlink-style parameter
+/// (`deadlink`, `deadurl`). `live`, `unfit`, `usurped`, `deviated` and anything else do not.
+fn url_dead(t: &TemplateRow, e: &TemplateEntry) -> bool {
+    let Some(p) = pick(t, e, "url_status", false) else { return false };
+    let v = p.value_text.trim().to_lowercase();
+    v == "dead" || (!is_status_form(&p.name) && YES_WORDS.contains(&v.as_str()))
 }
 
 /// The last parameter named `name` with a non-empty value.
@@ -540,7 +561,7 @@ impl<'t, 's> Citations<'t, 's> {
             row.id = rows.len() as i32;
             row.section_id = place.section_id;
             (row.para_id, row.para_offset) = resolve(*place);
-            row.dead_link = self.dead.contains(&i);
+            row.dead_link = row.dead_link || self.dead.contains(&i);
             if row.ref_id.is_none() {
                 let role = sections.get(place.section_id as usize).map_or("", |s| s.role.as_str());
                 row.context = if matches!(role, "bibliography" | "external_links") { "bibliography" } else { "other" }.to_string();
@@ -594,6 +615,7 @@ fn fill_from_template(row: &mut CitationRow, t: &TemplateRow, e: &TemplateEntry)
     row.isbn = text_of(t, e, "isbn");
     row.doi = text_of(t, e, "doi");
     row.access_date_raw = text_of(t, e, "access_date_raw");
+    row.dead_link = url_dead(t, e);
     row.harv_key = match e.family.as_deref() {
         Some("short") => sfn_key(t),
         _ => harv_key(row, t, e),

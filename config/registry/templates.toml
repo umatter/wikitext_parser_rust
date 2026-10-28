@@ -14,6 +14,11 @@
 #                   A scalar field takes the first listed parameter that is present and non-empty.
 #                   The list fields (authors, harv_names) are read by the citation and sfn code: authors
 #                   collects every present one, in order, with lastN + firstN combined.
+#                   url_status: the CS1 dead-link parameters, read as a scalar field. The citation's dead_link
+#                   is true when its value, trimmed and lowercased, is "dead", or, for a parameter whose name has
+#                   no "status" (deadlink, deadurl), one of yes, y, true, да. The names are those the corpora use
+#                   on CS1 templates: url-status, deadlink, deadurl (public: 861, 1952 and 29 parameters;
+#                   private Ruwiki: 0, 1119 and 3). dead-url and Russian equivalents occur in neither.
 # Parameter names come from the public corpus (tests/corpus/wikipedia_v1.parquet) and from the
 # documented parameters of the templates.
 
@@ -38,6 +43,7 @@ language = ["language", "lang"]
 isbn = ["isbn"]
 doi = ["doi"]
 access_date_raw = ["access-date", "accessdate"]
+url_status = ["url-status", "deadlink", "deadurl"]
 
 [[template]]
 name = "cite news"
@@ -60,6 +66,7 @@ language = ["language", "lang"]
 isbn = ["isbn"]
 doi = ["doi"]
 access_date_raw = ["access-date", "accessdate"]
+url_status = ["url-status", "deadlink", "deadurl"]
 
 [[template]]
 name = "cite book"
@@ -82,6 +89,7 @@ language = ["language", "lang"]
 isbn = ["isbn"]
 doi = ["doi"]
 access_date_raw = ["access-date", "accessdate"]
+url_status = ["url-status", "deadlink", "deadurl"]
 
 [[template]]
 name = "cite journal"
@@ -104,6 +112,7 @@ language = ["language", "lang"]
 isbn = ["isbn"]
 doi = ["doi"]
 access_date_raw = ["access-date", "accessdate"]
+url_status = ["url-status", "deadlink", "deadurl"]
 
 [[template]]
 name = "cite encyclopedia"
@@ -126,6 +135,78 @@ language = ["language", "lang"]
 isbn = ["isbn"]
 doi = ["doi"]
 access_date_raw = ["access-date", "accessdate"]
+url_status = ["url-status", "deadlink", "deadurl"]
+
+# CS1 forms the registry lacked (cite conference, cite report, cite thesis). None occurs in the public or the
+# private corpus; the parameters are the templates' documented ones. None of the three is a web page, news,
+# book, journal or encyclopedia entry as the other families mean them, so each is other_template.
+[[template]]
+name = "cite conference"
+aliases = []
+role = "citation"
+family = "other_template"
+[template.fields]
+url = ["url"]
+archive_url = ["archive-url", "archiveurl"]
+archive_date_raw = ["archive-date", "archivedate"]
+title = ["title", "trans-title"]
+authors = ["author", "last", "first", "last1", "first1", "last2", "first2", "authors"]
+harv_names = ["last1", "last2", "last3", "last4"]
+harv_ref = ["ref"]
+date_raw = ["date"]
+year = ["year"]
+publisher = ["publisher"]
+work = ["book-title", "conference"]
+language = ["language", "lang"]
+isbn = ["isbn"]
+doi = ["doi"]
+access_date_raw = ["access-date", "accessdate"]
+url_status = ["url-status", "deadlink", "deadurl"]
+
+[[template]]
+name = "cite report"
+aliases = []
+role = "citation"
+family = "other_template"
+[template.fields]
+url = ["url"]
+archive_url = ["archive-url", "archiveurl"]
+archive_date_raw = ["archive-date", "archivedate"]
+title = ["title", "trans-title"]
+authors = ["author", "last", "first", "last1", "first1", "last2", "first2", "authors"]
+harv_names = ["last1", "last2", "last3", "last4"]
+harv_ref = ["ref"]
+date_raw = ["date"]
+year = ["year"]
+publisher = ["publisher"]
+work = ["work", "series"]
+language = ["language", "lang"]
+isbn = ["isbn"]
+doi = ["doi"]
+access_date_raw = ["access-date", "accessdate"]
+url_status = ["url-status", "deadlink", "deadurl"]
+
+[[template]]
+name = "cite thesis"
+aliases = []
+role = "citation"
+family = "other_template"
+[template.fields]
+url = ["url"]
+archive_url = ["archive-url", "archiveurl"]
+archive_date_raw = ["archive-date", "archivedate"]
+title = ["title", "trans-title"]
+authors = ["author", "last", "first", "last1", "first1", "last2", "first2", "authors"]
+harv_names = ["last1", "last2", "last3", "last4"]
+harv_ref = ["ref"]
+date_raw = ["date"]
+year = ["year"]
+publisher = ["publisher", "institution", "school"]
+language = ["language", "lang"]
+isbn = ["isbn"]
+doi = ["doi"]
+access_date_raw = ["access-date", "accessdate"]
+url_status = ["url-status", "deadlink", "deadurl"]
 
 [[template]]
 name = "книга"
@@ -292,6 +373,7 @@ archive_url = ["archive-url", "archiveurl"]
 archive_date_raw = ["archive-date", "archivedate"]
 title = ["title"]
 work = ["website", "work"]
+url_status = ["url-status", "deadlink", "deadurl"]
 
 [[template]]
 name = "citation"
@@ -314,6 +396,7 @@ language = ["language", "lang"]
 isbn = ["isbn"]
 doi = ["doi"]
 access_date_raw = ["access-date", "accessdate"]
+url_status = ["url-status", "deadlink", "deadurl"]
 
 [[template]]
 name = "cite AV media"
@@ -334,6 +417,7 @@ publisher = ["publisher"]
 work = ["work"]
 language = ["language", "lang"]
 access_date_raw = ["access-date", "accessdate"]
+url_status = ["url-status", "deadlink", "deadurl"]
 
 [[template]]
 name = "cite video game"
@@ -360,6 +444,7 @@ harv_ref = ["ref"]
 date_raw = ["date"]
 language = ["language", "lang"]
 access_date_raw = ["access-date", "accessdate"]
+url_status = ["url-status", "deadlink", "deadurl"]
 
 # Archive wrapper: {{Архивировано|url=<archive URL>|date=...}}, used as {{webarchive}} is.
 [[template]]

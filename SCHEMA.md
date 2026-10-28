@@ -469,7 +469,7 @@ One row per source as written in the markup (`walk/citations.rs`). Counting by s
 | `archive_date_raw` | string, null | the archive date as written |
 | `host` | string, null | the host of `url` |
 | `registrable_domain` | string, null | the registrable domain of `host` |
-| `dead_link` | bool | a `link_status` template (`{{недоступная ссылка}}`, `{{dead link}}`) sits in the same body |
+| `dead_link` | bool | a `link_status` template (`{{недоступная ссылка}}`, `{{dead link}}`) sits in the same body, or the citation template's own dead-link parameter says the URL is dead (see Fields) |
 | `title` | string, null | the title; for a `bare_link`, the link's label (null without one, and for a free URL) |
 | `authors` | list\<string\> | the authors, in source order |
 | `date_raw` | string, null | the date as written |
@@ -525,6 +525,11 @@ section and paragraph (a bibliography entry, a list item).
   entry's `authors` list. A `lastN` comes with the `firstN` of its number as `"last, first"`; a `first` alone
   adds nothing.
 - `year` is the first run of exactly four digits between 1000 and 2100 in the `year` field, else in `date_raw`.
+- `dead_link` is also true when the entry's `url_status` field (the CS1 parameters `url-status`, `deadlink` and
+  `deadurl`, read as a scalar field) has a `value_text` that, trimmed and lowercased, is `dead`
+  (`url-status=dead`), or, for `deadlink` and `deadurl`, one of `yes`, `y`, `true` and `да` (`deadlink=yes`).
+  Every other value leaves it as the body's link-status templates set it: `live`, `no`, `unfit`, `usurped`,
+  `deviated`, and also an HTTP status code (`deadlink=404`).
 - A row from a template has the template's span and parent; a `bare_link` row the link's span and parent (a free
   URL's from its protocol to its last character, a comment inside included); a `plain_text` row the ref's span. All are placed where the walk met them. Ids follow the document order of
   their sources.
@@ -593,7 +598,6 @@ Written at the end of a run (`driver::Manifest`).
 - Footnote templates without `group=` take the registry's `default_group`, which comes from page-layout evidence
   (on the corpus pages, `{{efn}}` notes are listed under `{{комментарии}}`, so `{{efn}}` gets group `К`), not
   from the templates' expansion, which cannot be checked offline.
-- CS1 `url-status=dead` and `deadlink=` do not set `dead_link`; only `link_status` templates do.
 - A bare `archive.is` (`archive.today`, `archive.ph`, `archive.li`) link gets no `archive_date_raw`, though its URL
   carries the date.
 - `ref=` together with a year gives the key `CITEREF<ref><year>`, while CS1 uses `ref=` literally as the anchor;

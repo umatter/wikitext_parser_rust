@@ -2525,7 +2525,7 @@
       "archive_date_raw": "2012-05-09",
       "host": "census.gov",
       "registrable_domain": "census.gov",
-      "dead_link": false,
+      "dead_link": true,
       "title": "Архивированная копия",
       "authors": [],
       "date_raw": null,

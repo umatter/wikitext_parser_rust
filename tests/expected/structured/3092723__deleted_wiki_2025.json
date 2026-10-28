@@ -2003,7 +2003,7 @@
       "archive_date_raw": "2012-07-21",
       "host": "business.avn.com",
       "registrable_domain": "avn.com",
-      "dead_link": false,
+      "dead_link": true,
       "title": "Charlie Laine Joins Astrux, Metro",
       "authors": [
         "Chip Baker"

@@ -18,7 +18,7 @@ pub const ROLES: &[&str] = &[
 ];
 pub const FIELD_KEYS: &[&str] = &[
     "url", "archive_url", "archive_date_raw", "title", "authors", "date_raw", "year", "publisher", "work",
-    "language", "isbn", "doi", "access_date_raw", "harv_ref", "harv_names",
+    "language", "isbn", "doi", "access_date_raw", "harv_ref", "harv_names", "url_status",
 ];
 pub const SECTION_ROLES: &[&str] = &["notes", "bibliography", "external_links", "see_also"];
 const SITES: &[&str] = &["wikipedia", "ruwiki"];

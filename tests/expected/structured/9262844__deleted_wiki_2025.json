@@ -50124,7 +50124,7 @@
       "archive_date_raw": "2022-03-07",
       "host": "bbc.co.uk",
       "registrable_domain": "bbc.co.uk",
-      "dead_link": false,
+      "dead_link": true,
       "title": "Today 7 Mar 2022",
       "authors": [],
       "date_raw": "2022-03-07",
@@ -59264,7 +59264,7 @@
       "archive_date_raw": "2022-06-14",
       "host": "dtnext.in",
       "registrable_domain": "dtnext.in",
-      "dead_link": false,
+      "dead_link": true,
       "title": "Every bridge leading to key Ukrainian city destroyed",
       "authors": [
         "IANS"

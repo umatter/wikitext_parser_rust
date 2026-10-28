@@ -317,6 +317,18 @@ fn tags_are_case_insensitive_and_bodies_skip_nowiki_comments_and_pre() {
     assert_eq!(&t[c.refs[0].start as usize..c.refs[0].end as usize], "<REF Name=\"a\">x</Ref >");
 }
 
+/// R77: the fallback reads the CS1 dead-link parameters as the walk does.
+#[test]
+fn dead_link_parameters_agree_with_the_parsed_path() {
+    for (t, want) in common::DEAD_LINK_CASES {
+        let a = run_page(t, "wikipedia");
+        assert_eq!(a.page.status, "ok", "{t:?}");
+        let b = scan(t);
+        assert_eq!(summ_cites(&b), summ_cites(&a.components), "{t:?}");
+        assert_eq!(&b.citations.iter().map(|c| c.dead_link).collect::<Vec<_>>(), want, "{t:?}");
+    }
+}
+
 /// Where the parser's rules for malformed markup are the scanner's too, the two paths agree row for row:
 /// a closing tag of an open element ends a comment or a `<nowiki>` it is met in, a heading's content runs
 /// through an element that spans lines, a link in a link's label makes the outer one text, and the `=`s of a

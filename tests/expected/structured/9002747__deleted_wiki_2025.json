@@ -1396,7 +1396,7 @@
       "archive_date_raw": "2007-09-15",
       "host": "ficeb.com",
       "registrable_domain": "ficeb.com",
-      "dead_link": false,
+      "dead_link": true,
       "title": "Awards Won",
       "authors": [],
       "date_raw": null,

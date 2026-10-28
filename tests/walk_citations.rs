@@ -279,3 +279,37 @@ fn free_urls_in_refs_are_bare_links() {
     let c = cites("<ref>http://a.ru/x {{недоступная ссылка}}</ref>");
     assert!(c[0].dead_link);
 }
+
+/// R77: a CS1 dead-link parameter (`url-status=dead`, `deadlink=yes`) marks its own citation.
+#[test]
+fn cs1_dead_link_parameters() {
+    for (text, want) in common::DEAD_LINK_CASES {
+        let got: Vec<bool> = cites(text).iter().map(|c| c.dead_link).collect();
+        assert_eq!(&got, want, "{text:?}");
+    }
+}
+
+/// The three CS1 forms added with R77 are citations of family other_template, with their fields.
+#[test]
+fn cs1_conference_report_and_thesis() {
+    let c = cites(concat!(
+        "<ref>{{cite conference|url=http://a.ru/x|title=П|last=Иванов|first=И.|book-title=Труды|year=2001}}</ref>",
+        "<ref>{{cite report|url=http://b.ru/y|title=Д|publisher=Минфин|series=Серия|date=2002-01-01}}</ref>",
+        "<ref>{{cite thesis|title=Т|author=Петров|institution=МГУ|year=2003|degree=PhD}}</ref>",
+    ));
+    let v: Vec<_> = c
+        .iter()
+        .map(|x| (x.family.as_str(), x.template_name.as_deref(), x.title.as_deref(), x.work.as_deref(), x.publisher.as_deref(), x.year))
+        .collect();
+    assert_eq!(
+        v,
+        vec![
+            ("other_template", Some("cite conference"), Some("П"), Some("Труды"), None, Some(2001)),
+            ("other_template", Some("cite report"), Some("Д"), Some("Серия"), Some("Минфин"), Some(2002)),
+            ("other_template", Some("cite thesis"), Some("Т"), None, Some("МГУ"), Some(2003)),
+        ]
+    );
+    assert_eq!(c[0].authors, vec!["Иванов, И.".to_string()]);
+    assert_eq!(c[0].harv_key.as_deref(), Some("CITEREFИванов2001"));
+    assert_eq!(c[1].host.as_deref(), Some("b.ru"));
+}

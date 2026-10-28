@@ -51,6 +51,39 @@ pub const FREE_URL_CASES: &[(&str, &[(&str, Option<&str>, Option<&str>, Option<&
     ("{{sfn|http://a.ru|2000}}", &[]),
 ];
 
+/// CS1 dead-link parameters (R77), for the walk's tests and the fallback's parity test: each text with the
+/// `dead_link` of its citation rows.
+pub const DEAD_LINK_CASES: &[(&str, &[bool])] = &[
+    ("<ref>{{cite web|url=http://a.ru/x|archive-url=https://web.archive.org/web/2020/http://a.ru/x|url-status=dead}}</ref>", &[true]),
+    ("<ref>{{cite web|url=http://a.ru/x|archive-url=https://web.archive.org/web/2020/http://a.ru/x|url-status=live}}</ref>", &[false]),
+    ("<ref>{{cite web|url=http://a.ru/x|deadlink=yes}}</ref>", &[true]),
+    // Trimmed and lowercased; the yes-words of a deadlink-style parameter.
+    ("<ref>{{cite news|url=http://a.ru/x|url-status= Dead }}</ref>", &[true]),
+    ("<ref>{{cite web|url=http://a.ru/x|deadlink=да}}</ref>", &[true]),
+    ("<ref>{{cite web|url=http://a.ru/x|deadurl=Y}}</ref>", &[true]),
+    ("<ref>{{cite journal|url=http://a.ru/x|deadlink=true}}</ref>", &[true]),
+    ("<ref>{{cite web|url=http://a.ru/x|deadlink=dead}}</ref>", &[true]),
+    // Not dead: other values, an empty one, a yes-word in `url-status`, an HTTP code.
+    ("<ref>{{cite web|url=http://a.ru/x|deadlink=no}}</ref>", &[false]),
+    ("<ref>{{cite web|url=http://a.ru/x|deadlink=}}</ref>", &[false]),
+    ("<ref>{{cite web|url=http://a.ru/x|deadlink=404}}</ref>", &[false]),
+    ("<ref>{{cite web|url=http://a.ru/x|url-status=yes}}</ref>", &[false]),
+    ("<ref>{{cite web|url=http://a.ru/x|url-status=unfit}}</ref>", &[false]),
+    ("<ref>{{cite web|url=http://a.ru/x|url-status=usurped}}</ref>", &[false]),
+    ("<ref>{{cite web|url=http://a.ru/x|url-status=deviated}}</ref>", &[false]),
+    // The first listed parameter present counts (`url-status` before `deadlink`).
+    ("<ref>{{cite web|url=http://a.ru/x|deadlink=yes|url-status=live}}</ref>", &[false]),
+    // A parameter marks its own row, not the body's other rows; a link-status template keeps marking the body.
+    ("<ref>{{cite web|url=http://a.ru/x|url-status=dead}} {{cite web|url=http://b.ru/y}}</ref>", &[true, false]),
+    ("<ref>{{cite web|url=http://a.ru/x|url-status=live}} {{недоступная ссылка}}</ref>", &[true]),
+    // A registry entry without the field: no parameter is read.
+    ("<ref>{{статья|ссылка=http://a.ru/x|url-status=dead}}</ref>", &[false]),
+    // The CS1 forms added with it.
+    ("<ref>{{cite conference|url=http://a.ru/x|title=T|url-status=dead}}</ref>", &[true]),
+    ("<ref>{{cite thesis|url=http://a.ru/x|title=T|deadlink=yes}}</ref>", &[true]),
+    ("<ref>{{cite report|url=http://a.ru/x|title=T}}</ref>", &[false]),
+];
+
 pub const DEFAULT_PRIVATE: &str = "../ruwiki_replication_package_sources/data/results/sources/test_corpus/parser_test_corpus_v1.parquet";
 
 pub fn public_corpus() -> Vec<CorpusRow> {

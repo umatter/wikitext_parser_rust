@@ -1967,7 +1967,7 @@
       "archive_date_raw": "2013-12-29",
       "host": "pantheon.org",
       "registrable_domain": "pantheon.org",
-      "dead_link": false,
+      "dead_link": true,
       "title": "Энциклопедия Mythica ™",
       "authors": [],
       "date_raw": null,
