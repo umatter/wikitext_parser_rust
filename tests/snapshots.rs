@@ -5,8 +5,11 @@
 //! * Private versions have lines in `tests/expected/structured_private.sha256` and readable copies in the
 //!   gitignored `tests/private/structured/`. Private failures name page id, version and path only.
 //!
-//! `UPDATE_EXPECTED=1` rewrites the expected files. The `#[ignore]` test `generate_selection` writes
-//! `selected.tsv` once.
+//! `UPDATE_EXPECTED=1` rewrites the expected files, public and private together: with the private corpus
+//! absent it fails before writing anything, since rewriting the public files alone would leave
+//! `structured_private.sha256` stale (R70). Each test clears its directory of new outputs
+//! (`target/snapshots-new/`, `tests/private/snapshots-new/`) when it starts, so what is there is from the last
+//! run. The `#[ignore]` test `generate_selection` writes `selected.tsv` once.
 mod common;
 
 use sha2::{Digest, Sha256};
@@ -114,6 +117,25 @@ fn updating() -> bool {
     std::env::var("UPDATE_EXPECTED").is_ok_and(|v| v == "1")
 }
 
+/// Removes a directory of new outputs left by an earlier run.
+fn clear(dir: &str) {
+    if let Err(e) = std::fs::remove_dir_all(dir) {
+        assert_eq!(e.kind(), std::io::ErrorKind::NotFound, "clearing {dir}: {e}");
+    }
+}
+
+/// `UPDATE_EXPECTED=1` rewrites the public and the private expected files together, so it needs the private
+/// corpus (R70).
+fn require_private_corpus_for_update() {
+    let path = common::private_path();
+    assert!(
+        path.exists(),
+        "UPDATE_EXPECTED=1 needs the private corpus ({}, set WIKITEXT_PRIVATE_CORPUS): rewriting the public \
+         expected files alone would leave {PRIVATE_HASHES} stale",
+        path.display()
+    );
+}
+
 fn unique(ids: &[Id]) {
     let set: BTreeSet<&Id> = ids.iter().collect();
     assert_eq!(set.len(), ids.len(), "duplicate (page_id, version) in the corpus");
@@ -121,6 +143,10 @@ fn unique(ids: &[Id]) {
 
 #[test]
 fn public_structured_output_matches_snapshots() {
+    clear(PUBLIC_NEW);
+    if updating() {
+        require_private_corpus_for_update();
+    }
     let rows = common::public_corpus();
     let ids: Vec<Id> = rows.iter().map(id).collect();
     unique(&ids);
@@ -198,6 +224,10 @@ fn public_structured_output_matches_snapshots() {
 
 #[test]
 fn private_structured_output_matches_hashes() {
+    clear(PRIVATE_NEW);
+    if updating() {
+        require_private_corpus_for_update();
+    }
     let Some(rows) = common::private_corpus("private_structured_output_matches_hashes") else {
         return;
     };

@@ -466,6 +466,56 @@ commit `181dfb8` plus the Task 10 changes. Only aggregate figures from the perfo
   the run; reading, converting and writing are. If a page ever ran to the budget (about 30 s), its batch would
   wait for it.
 
+#### Release 1.0.0 (2026-10-28)
+
+Measured with the full walk (all eight tables), release build at commit `8b4b801` plus the Task 21 changes, on
+the same performance sample (row group 0 of the 2025 cross-section: 14,568 pairs, 29,136 page versions, 148 MB),
+`parse_components --jobs 12`, default budget, labels `official_text=wikipedia:2025-01-01` and
+`clone_text=ruwiki:2025-01-01`, output outside the repository. The machine has 12 hardware threads. Only
+aggregates from the manifest and the `timings` table appear here. The sample is kept outside the repository; it
+was not deleted.
+
+- **Throughput.** 1,284, 1,287 and 1,290 pages per second over three runs (`pages_per_second`; wall time 22.7 to
+  22.8 s, 55 s of user time, peak resident memory 1.2 GB). Output: 227 MB for the sample, about 13.5 GB projected
+  for the whole cross-section.
+- **Budget.** 0 of 29,136 versions over budget (0.000%), `seconds_over_budget` 0.0, no failed inputs. Status
+  counts: `wikipedia`/`2025-01-01` 14,562 `ok` and 6 `redirect`; `ruwiki`/`2025-01-01` 14,568 `ok`. No
+  `fallback`, `budget`, `depth_limit`, `panic` or `hang`. The largest parse took 684,448 steps.
+- **Per page** (ms, median / p90 / p99 / p99.9 / max), parse plus walk: Wikipedia 0.73 / 2.78 / 10.83 / 27.66 /
+  59.3; Ruwiki 0.67 / 2.56 / 9.05 / 23.10 / 41.2. The walk takes about four times the parse (7.4 s of parse and
+  30.4 s of walk summed over all versions).
+- **Projection** at the slowest run's 1,284 pages per second, counting two versions per input row (each family's
+  files have two text columns):
+  - cross-section, 866,484 pairs = 1,732,968 versions: about 22.5 min (0.37 h);
+  - Wikipedia time series, 1.4 M rows = 2.8 M versions: about 36 min (0.61 h); 18 min if the 1.4 M are
+    versions, as the calibration note read them;
+  - Ruwiki time series, 1.1 M rows = 2.2 M versions: about 29 min (0.48 h); 14 min if versions.
+
+  Every family is far below the 8-hour target (D9), by a factor of 13 or more. No page was over budget, so
+  the projection includes no budget pages; one at the full budget would cost its batch about 30 s.
+- **Where the time goes.** Parse and walk sum to 37.8 s of CPU time, 3.2 s over 12 threads, against 22.7 s of
+  wall time. As in the calibration note, the run is limited by the serial part (reading, converting, serialising
+  and writing), not by parsing. That is the place to speed it up, should it ever matter.
+- **Locality on the sample** (`locality_report_sample`, counts only). 14,568 pairs, 368 byte-identical.
+  Comparing each Wikipedia version with its Ruwiki version, 344,409 rows differ in `fp`; 345 of them lie
+  outside every changed line range (with its one-line widening) and are not exempted by the section rule. They
+  fall in 21 pairs (5 with one, 7 with 2 to 9, 9 with 10 or more), none byte-identical. By table: paragraphs
+  319, sections 10, templates 10, refs 3, citations 3. By class, read locally without recording any content:
+  - **Enclosure changes**, 334 (paragraphs 319, templates 9, refs 3, citations 3): unchanged lines that sit inside a comment, a table or a
+    template on one side only, because an edit elsewhere added, removed or moved the opener or closer
+    (commented-out passages, a list wrapped in a layout table, a table whose closing `|}` was removed). In the
+    report these are rows that are absent on the other side, or present at another span. The line diff cannot
+    see this long-range effect of an edit. Tables carry no text in 1.0.0, so text that moves into or out of a
+    table disappears or appears.
+  - **Section reparenting**, 10: a heading inserted, removed or given another level elsewhere gives later
+    sections, at the same span, another parent and so another path. The ancestor rule (a section is touched
+    through its ancestors' headings) exempts only the version whose changed heading is an ancestor.
+  - **Repeated `fp`**, 1: a template row that is the surplus of a repeated `fp`, inside such a commented region.
+
+  No class points at a settings or registry difference between the sites (no row at the same span with
+  differing parameters or text, no citation lost where its template remains), and byte-identical pairs have
+  none.
+
 
 ### D9. Efficiency
 

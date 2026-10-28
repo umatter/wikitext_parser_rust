@@ -46,6 +46,8 @@ fn walk(f: &Field, table: &str) {
     }
 }
 
+/// Schema 1.0.0 is frozen (Task 21): `tests/schema/v1.json` is never rewritten, `UPDATE_EXPECTED` included,
+/// and any difference fails. A later schema bumps `SCHEMA_VERSION` and is pinned in a file of its own.
 #[test]
 fn schemas_match_frozen_snapshot() {
     let got: Value = Value::Object(
@@ -56,10 +58,14 @@ fn schemas_match_frozen_snapshot() {
     );
     let path = "tests/schema/v1.json";
     if std::env::var("UPDATE_EXPECTED").is_ok() {
-        std::fs::write(path, serde_json::to_string_pretty(&got).unwrap() + "\n").unwrap();
+        eprintln!("UPDATE_EXPECTED is ignored here: {path} is frozen at schema 1.0.0");
     }
     let want: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
-    assert_eq!(got, want, "schema changed: bump SCHEMA_VERSION (minor: added column/table; major: rename/remove/meaning)");
+    assert_eq!(
+        got, want,
+        "schema changed: bump SCHEMA_VERSION (minor: added column/table; major: rename/remove/meaning); \
+         {path} is frozen at 1.0.0 and is never rewritten"
+    );
 }
 
 #[test]
