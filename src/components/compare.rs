@@ -16,15 +16,19 @@
 //!   start of the line before to the end of the line after, as far as they exist.
 //! - `locality` checks the tables `sections`, `paragraphs`, `templates`, `refs` and `citations`. A component
 //!   *differs* when no component of the same table in the other version has its `fp`. It is a violation when
-//!   it differs and its span overlaps no changed range of its own text: `start < b && a < end` for a range
-//!   `a..b`, and for an empty span or range, the position lying in the other, ends included.
+//!   it differs and is not *touched*: its span overlaps no changed range of its own text (`start < b && a <
+//!   end` for a range `a..b`, and for an empty span or range, the position lying in the other, ends included).
+//!   A section is also touched when the heading (`heading_start..heading_end`) of one of its ancestors, found
+//!   through `parent_section_id`, overlaps a changed range (Ruling R63): its `fp` hashes its path, so renaming
+//!   an ancestor changes its identity although its own lines did not change.
 
+use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
 use serde::Serialize;
 use similar::{DiffTag, TextDiff};
 
-use crate::model::PageOutput;
+use crate::model::{PageOutput, SectionRow};
 
 /// The pages-row fields that label a version rather than describe its parse.
 const LABELS: [&str; 8] = ["source_file", "row", "page_id", "site", "version", "column", "title", "timestamp"];
@@ -114,22 +118,51 @@ pub struct Violation {
     pub end: i32,
 }
 
-/// (id, fp, start, end) of a row.
-type Row<'a> = (i32, &'a str, i32, i32);
+/// A row: its id, its `fp`, its span, and the further spans that touch it (a section's ancestors' headings).
+struct Row<'a> {
+    id: i32,
+    fp: &'a str,
+    span: (i32, i32),
+    via: Vec<(i32, i32)>,
+}
+
+fn row(id: i32, fp: &str, start: i32, end: i32) -> Row<'_> {
+    Row { id, fp, span: (start, end), via: Vec::new() }
+}
+
+/// The heading spans of the ancestors of section `s`, nearest first, up to the lead (its own parent).
+fn ancestor_headings(by_id: &HashMap<i32, &SectionRow>, s: &SectionRow) -> Vec<(i32, i32)> {
+    let mut out = Vec::new();
+    let (mut id, mut steps) = (s.parent_section_id, 0);
+    while id != s.id && steps < by_id.len() {
+        let Some(a) = by_id.get(&id) else { break };
+        if let (Some(hs), Some(he)) = (a.heading_start, a.heading_end) {
+            out.push((hs, he));
+        }
+        if a.parent_section_id == a.id {
+            break;
+        }
+        (id, steps) = (a.parent_section_id, steps + 1);
+    }
+    out
+}
 
 /// The rows of the five tables, by table.
 fn rows(p: &PageOutput) -> [(&'static str, Vec<Row<'_>>); 5] {
     let c = &p.components;
+    let by_id: HashMap<i32, &SectionRow> = c.sections.iter().map(|r| (r.id, r)).collect();
+    let sections = c.sections.iter().map(|r| Row { via: ancestor_headings(&by_id, r), ..row(r.id, &r.fp, r.start, r.end) }).collect();
     [
-        ("sections", c.sections.iter().map(|r| (r.id, r.fp.as_str(), r.start, r.end)).collect()),
-        ("paragraphs", c.paragraphs.iter().map(|r| (r.id, r.fp.as_str(), r.start, r.end)).collect()),
-        ("templates", c.templates.iter().map(|r| (r.id, r.fp.as_str(), r.start, r.end)).collect()),
-        ("refs", c.refs.iter().map(|r| (r.id, r.fp.as_str(), r.start, r.end)).collect()),
-        ("citations", c.citations.iter().map(|r| (r.id, r.fp.as_str(), r.start, r.end)).collect()),
+        ("sections", sections),
+        ("paragraphs", c.paragraphs.iter().map(|r| row(r.id, &r.fp, r.start, r.end)).collect()),
+        ("templates", c.templates.iter().map(|r| row(r.id, &r.fp, r.start, r.end)).collect()),
+        ("refs", c.refs.iter().map(|r| row(r.id, &r.fp, r.start, r.end)).collect()),
+        ("citations", c.citations.iter().map(|r| row(r.id, &r.fp, r.start, r.end)).collect()),
     ]
 }
 
-fn overlaps((start, end): (usize, usize), r: &Range<usize>) -> bool {
+fn overlaps((start, end): (i32, i32), r: &Range<usize>) -> bool {
+    let (start, end) = (start.max(0) as usize, end.max(0) as usize);
     if start == end || r.start == r.end {
         (r.start <= start && start <= r.end) || (start <= r.start && r.start <= end)
     } else {
@@ -137,8 +170,8 @@ fn overlaps((start, end): (usize, usize), r: &Range<usize>) -> bool {
     }
 }
 
-/// The components of either version that differ and overlap no changed range of their own text: the old
-/// version's first, then the new one's, each table in the order above and rows in id order.
+/// The components of either version that differ and are not touched by a changed range of their own text:
+/// the old version's first, then the new one's, each table in the order above and rows in id order.
 pub fn locality(old_text: &str, new_text: &str, old: &PageOutput, new: &PageOutput) -> Vec<Violation> {
     let (old_ranges, new_ranges) = changed_ranges(old_text, new_text);
     let (old_rows, new_rows) = (rows(old), rows(new));
@@ -146,11 +179,11 @@ pub fn locality(old_text: &str, new_text: &str, old: &PageOutput, new: &PageOutp
     let sides = [(&old_rows, &new_rows, &old_ranges), (&new_rows, &old_rows, &new_ranges)];
     for (mine, theirs, ranges) in sides {
         for ((table, mine), (_, theirs)) in mine.iter().zip(theirs.iter()) {
-            let other: std::collections::HashSet<&str> = theirs.iter().map(|r| r.1).collect();
-            for &(id, fp, start, end) in mine {
-                let span = (start.max(0) as usize, end.max(0) as usize);
-                if !other.contains(fp) && !ranges.iter().any(|r| overlaps(span, r)) {
-                    out.push(Violation { table, id, fp: fp.to_string(), start, end });
+            let other: HashSet<&str> = theirs.iter().map(|r| r.fp).collect();
+            for r in mine {
+                let touched = std::iter::once(&r.span).chain(&r.via).any(|&s| ranges.iter().any(|c| overlaps(s, c)));
+                if !other.contains(r.fp) && !touched {
+                    out.push(Violation { table, id: r.id, fp: r.fp.to_string(), start: r.span.0, end: r.span.1 });
                 }
             }
         }

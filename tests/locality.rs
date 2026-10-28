@@ -150,12 +150,23 @@ fn locality_flags_what_differs_away_from_the_edit() {
     let (old, new) = ("== A ==\nx\n\n== B ==\ny\n", "== A ==\nx\n\n== B ==\nz\n");
     assert_eq!(locality(old, new, &run(old), &run(new)), vec![]);
     assert!(!locality("", "", &run(old), &run(new)).is_empty(), "the edit makes components differ");
-    // Renaming a parent changes the path of its child, whose own lines did not change: one violation per side.
-    let (old, new) = ("== A ==\nx\n\n=== B ===\ny\n", "== C ==\nx\n\n=== B ===\ny\n");
-    let v = locality(old, new, &run(old), &run(new));
-    let got: Vec<_> = v.iter().map(|v| (v.table, v.id, v.start, v.end)).collect();
-    assert_eq!(got, vec![("sections", 2, 11, 23), ("sections", 2, 11, 23)]);
-    assert_ne!(v[0].fp, v[1].fp);
+}
+
+#[test]
+fn a_section_is_touched_through_its_ancestors_headings() {
+    let run = |t: &str| common::run_page(t, "wikipedia");
+    // Renaming a parent changes the path, so the fp, of its child and grandchild, whose own lines did not change.
+    let old = "== A ==\nx\n\n=== B ===\ny\n\n==== D ====\nw\n\n== E ==\nv\n";
+    let new = "== C ==\nx\n\n=== B ===\ny\n\n==== D ====\nw\n\n== E ==\nv\n";
+    let (a, mut b) = (run(old), run(new));
+    let differ: Vec<_> = locality("", "", &a, &b).iter().map(|v| (v.table, v.id)).collect();
+    assert_eq!(differ, [("sections", 1), ("sections", 2), ("sections", 3)].repeat(2));
+    // The renamed heading touches its descendants (R63), so nothing is a violation.
+    assert_eq!(locality(old, new, &a, &b), vec![]);
+    // A section elsewhere whose fp changes, its own lines and its ancestors' headings unchanged, still is one.
+    b.components.sections[4].fp = "0000000000000000".into();
+    let v: Vec<_> = locality(old, new, &a, &b).iter().map(|v| (v.table, v.id, v.start, v.end)).collect();
+    assert_eq!(v, vec![("sections", 4, 39, 49), ("sections", 4, 39, 49)]);
 }
 
 #[test]
