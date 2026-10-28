@@ -291,11 +291,13 @@ fn check_page(pg: &Page, c: &Components, reg: &Registry, site: &str, n: &mut [us
         }
         let want_uses = r.name.is_some() && matches!(r.kind.as_str(), "named" | "list_defined");
         ck(r.n_uses.is_some() == want_uses, "n_uses", &|| format!("{:?}", r.n_uses));
-        // R50: a ref with a harv_key (a short footnote, or a ref holding a short citation) is resolved when it
-        // cites a citation; the others keep the body-or-definition meaning.
-        let want_resolved = match r.harv_key {
-            Some(_) => r.cites_citation_id.is_some(),
-            None => has_body(r) || r.def_ref_id.is_some(),
+        // R50: a short footnote ({{sfn}} and aliases) and a ref holding a short citation are resolved only
+        // through a found citation, key or no key; the others keep the body-or-definition meaning.
+        let short = s.to_lowercase().starts_with("{{sfn")
+            || c.citations.iter().any(|x| x.ref_id == Some(r.id) && x.family == "short");
+        let want_resolved = match short {
+            true => r.cites_citation_id.is_some(),
+            false => has_body(r) || r.def_ref_id.is_some(),
         };
         ck(r.resolved == want_resolved, "resolved", &|| r.resolved.to_string());
         ck(r.fp.len() == 16, "fp", &|| r.fp.clone());

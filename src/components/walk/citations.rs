@@ -43,15 +43,14 @@
 //!   entry's `harv_names` in order (`last1`..`last4`), else the surnames of `authors` (text before the first
 //!   space or comma), up to four. Else none. An empty `harv_ref` (including a template value, whose
 //!   `value_text` is empty) is absent.
-//! - The year is the `year` field as digits; if the year parameter or `date_raw` carries `\d{4}[a-zа-я]`
-//!   for that year, with the letter standing alone, the letter is kept (`1990a`). A year parameter that is a
+//! - The year is the `year` field as digits; the letter is kept only when the year parameter itself is a whole
+//!   `^\d{4}[a-zа-я]$` (`1990a`); a year from `date_raw` never carries one. A year parameter that is a
 //!   whole date (`04.08.2009`) is used as written: pages key their sfn calls by it. Without a year, no key
 //!   unless `harv_ref` gives one (then with an empty year).
 //! - A citation of family short (`harvnb`, `sfn0`) takes its key by the sfn rule (`sfn_key`) on its
 //!   positional parameters, and is no target of resolution.
 //!
 //! # Rows
-//!
 //!
 //! - A template row has the template's span and parent; a `bare_link` the link's span and its parent; a
 //!   `plain_text` row the ref's span and the ref as parent. All are placed where the walk met them.
@@ -159,7 +158,7 @@ pub fn citeref(names: &[&str], year: &str) -> String {
 static YEAR_PARAM: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\d{4}[a-zа-я]?$").expect("year regex"));
 /// A year parameter that is a whole date (`04.08.2009`): sfn keys of such pages carry it as written.
 static YEAR_DATE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\d{1,2}\.\d{1,2}\.\d{4}$").expect("date regex"));
-static YEAR_LETTER: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(\d{4})([a-zа-я])(?:[^a-zа-я]|$)").expect("letter regex"));
+static YEAR_LETTER: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\d{4}[a-zа-я]$").expect("letter regex"));
 
 /// The key of a short footnote or short citation: the positional parameters up to the first that looks like
 /// a year are the names, that one the year (no year: all are names). `None` without a name.
@@ -192,11 +191,12 @@ fn harv_key(row: &CitationRow, t: &TemplateRow, e: &TemplateEntry) -> Option<Str
         if let Some(d) = &year_param {
             return d.clone();
         }
-        let sources = [text_of(t, e, "year"), row.date_raw.clone()];
-        let letter = sources.iter().flatten().find_map(|s| {
-            YEAR_LETTER.captures_iter(s).find(|c| c[1] == y).map(|c| c[2].to_string())
-        });
-        y + letter.as_deref().unwrap_or("")
+        // A letter stays only when the year field itself is `\d{4}[a-zа-я]`; a year read from `date_raw`
+        // (`10.05.2009г.`, `1990s`) never carries one.
+        match text_of(t, e, "year").map(|v| v.trim().to_string()) {
+            Some(v) if YEAR_LETTER.is_match(&v) && v.starts_with(&y) => v,
+            _ => y,
+        }
     });
     let hr = text_of(t, e, "harv_ref").map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
     if let Some(r) = hr.as_deref().filter(|r| !r.eq_ignore_ascii_case("harv")) {

@@ -85,8 +85,27 @@ fn date_as_year_and_year_letters() {
     let c = run_page(t, "wikipedia").components;
     assert_eq!(c.citations[0].harv_key.as_deref(), Some("CITEREFКавказский_Узел04.08.2009"));
     assert!(c.refs[0].resolved);
-    // The letter of a year parameter or of a date is kept.
+    // The letter of a year parameter is kept; a date never gives one.
     let c = run_page("* {{cite book |last1=Иванов |date=1990a}}\n* {{книга |автор=Петров П. |год=2001б}}\n* {{cite book |last1=Сидоров |date=in 1990 ago}}", "wikipedia").components;
     let k: Vec<_> = c.citations.iter().map(|x| x.harv_key.as_deref()).collect();
-    assert_eq!(k, vec![Some("CITEREFИванов1990a"), Some("CITEREFПетров2001б"), Some("CITEREFСидоров1990")]);
+    assert_eq!(k, vec![Some("CITEREFИванов1990"), Some("CITEREFПетров2001б"), Some("CITEREFСидоров1990")]);
+}
+
+#[test]
+fn year_letter_only_from_the_year_field() {
+    let c = run_page(
+        "* {{книга |автор=А |год=2009г.}}\n* {{cite book |last1=Б |date=10.05.2009г.}}\n* {{cite book |last1=В |date=1990s}}\n* {{cite book |last1=Г |year=1990а}}",
+        "wikipedia",
+    )
+    .components;
+    let k: Vec<_> = c.citations.iter().map(|x| x.harv_key.as_deref()).collect();
+    assert_eq!(k, vec![Some("CITEREFА2009"), Some("CITEREFБ2009"), Some("CITEREFВ1990"), Some("CITEREFГ1990а")]);
+}
+
+#[test]
+fn names_form_with_a_date_year_and_a_year_only_sfn() {
+    let c = run_page("A{{sfn|Иванов|04.08.2009}} B{{sfn|1990}}\n* {{cite book |last=Иванов |last1=Иванов |year=04.08.2009}}", "wikipedia").components;
+    assert_eq!(c.citations[0].harv_key.as_deref(), Some("CITEREFИванов04.08.2009"));
+    assert_eq!((c.refs[0].harv_key.as_deref(), c.refs[0].cites_citation_id, c.refs[0].resolved), (Some("CITEREFИванов04.08.2009"), Some(0), true));
+    assert_eq!((c.refs[1].harv_key.as_deref(), c.refs[1].cites_citation_id, c.refs[1].resolved), (None, None, false));
 }
