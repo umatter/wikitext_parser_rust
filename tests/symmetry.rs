@@ -66,7 +66,8 @@ fn ruwiki_versions_equal_to_the_fork_day_parse_alike() {
             (fork.wikitext == r.wikitext).then_some((fork, r))
         })
         .collect();
-    assert!(!pairs.is_empty(), "no Ruwiki version equals its fork-day version");
+    // The private corpus is pinned by its hash, so the number of byte-identical pairs is too.
+    assert_eq!(pairs.len(), 17, "Ruwiki versions byte-identical to their fork-day version");
     let mut bad = Vec::new();
     for (i, (fork, r)) in pairs.iter().enumerate() {
         let a = &common::run_rows(std::slice::from_ref(*fork), "wikipedia")[0];
