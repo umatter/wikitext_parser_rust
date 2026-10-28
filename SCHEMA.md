@@ -268,7 +268,9 @@ Every page version gets exactly one (`page.rs`, `process_with`). A failure carri
 
 `hang` is the one status that can depend on the machine, and it should never occur: the budgets bound all the
 work. A page that runs past the watchdog limit stops the run (its `source_file`, `row` and `column` go to
-`<out>/quarantine.list`), and `--resume` then gives it `hang`.
+`<out>/quarantine.list`), and `--resume` then gives it `hang`. The fallback scan of a quarantined page runs
+under the watchdog too: if that scan alone runs past the limit, the run stops again on every `--resume`, and
+`--resume --no-fallback` then gives the page `hang` with no rows.
 
 ## timings
 
@@ -506,7 +508,8 @@ section and paragraph (a bibliography entry, a list item).
   parameter of a template that is no citation template (`{{lang-en|http://a.ru}}`) counts, as a bracketed link
   there does. A `<pre>` hides the free URLs up to its `</pre>` only when that closing tag comes before the end
   of the ref (or other extension tag) the `<pre>` is in, or before the end of the page outside one: as MediaWiki's
-  preprocessor reads it, an unclosed `<pre>` and a self-closing `<pre/>` are text and hide nothing.
+  preprocessor reads it, an unclosed `<pre>` is text and a self-closing `<pre/>` an empty element, and neither
+  hides anything.
 - A ref with a body and no other row yields one `plain_text` row, at the ref's span with the ref as parent. So
   "refs without an identifiable source" is countable rather than missing.
 - An archive wrapper (`{{webarchive}}`, `{{wayback}}`, `{{архивировано}}`) merges into the nearest preceding row

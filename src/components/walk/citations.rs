@@ -66,7 +66,7 @@
 //!   `external_links`, else `other`.
 //! - `fp` = `fp(family + "\u{1f}" + (url, else norm(title + " " + authors) if any, else norm(text)))`.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
 
 use regex::Regex;
@@ -265,6 +265,12 @@ fn authors(t: &TemplateRow, e: &TemplateEntry) -> Vec<String> {
     let base = |n: &str| n.trim_end_matches(|c: char| c.is_ascii_digit()).to_string();
     let Some(names) = e.fields.get("authors") else { return Vec::new() };
     let bases: HashSet<String> = names.iter().map(|n| base(n)).filter(|b| !b.is_empty()).collect();
+    // The last non-empty value of each parameter name, as `param` reads it, built once: a lookup per `lastN`
+    // would make a long author list quadratic.
+    let mut last_value: HashMap<&str, &ParamRow> = HashMap::new();
+    for p in t.params.iter().filter(|p| !p.value_text.is_empty()) {
+        last_value.insert(p.name.as_str(), p);
+    }
     let mut out = Vec::new();
     for p in &t.params {
         let b = base(&p.name);
@@ -274,7 +280,7 @@ fn authors(t: &TemplateRow, e: &TemplateEntry) -> Vec<String> {
         match b.as_str() {
             "first" => {}
             "last" => {
-                let first = param(t, &format!("first{}", &p.name[b.len()..]), false);
+                let first = last_value.get(format!("first{}", &p.name[b.len()..]).as_str()).copied();
                 out.push(match first {
                     Some(f) => format!("{}, {}", p.value_text, f.value_text),
                     None => p.value_text.clone(),

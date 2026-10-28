@@ -321,8 +321,8 @@ struct Walker<'t, 's> {
     /// Where the `<pre>` regions met so far end (the start of their `</pre>`): no free URL starts before it. The
     /// parser reads `<pre>` as an HTML tag, MediaWiki its content as raw text, where no free URL is a link.
     /// MediaWiki's preprocessor reads a `<pre>` as one only when its closing tag follows, inside the extension
-    /// tag it is in (a ref's body): an unclosed or self-closing `<pre>` is text, as the fallback scanner reads
-    /// it too.
+    /// tag it is in (a ref's body): an unclosed `<pre>` is text and a self-closing `<pre/>` an empty element, so
+    /// neither hides anything, as the fallback scanner reads them too.
     pre_until: usize,
     /// The last question to `pre_closer` and its answer.
     pre_closer: Option<(usize, Option<usize>)>,
