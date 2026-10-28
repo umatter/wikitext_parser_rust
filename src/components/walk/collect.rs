@@ -187,6 +187,18 @@ impl<'t, 's> Collect<'t, 's> {
         self.citations.enter_link(label, span, place, self.parent());
     }
 
+    /// Whether a free URL met now can be a row: in a ref's body, outside citation templates (R73). The walk asks
+    /// before it looks for free URLs in a text node.
+    pub(crate) fn wants_free_urls(&self) -> bool {
+        self.citations.wants_free_urls()
+    }
+
+    /// A free URL (`autolink`) spanning `span` is met: a `bare_link` row in a ref's body, outside citation
+    /// templates; nothing elsewhere.
+    pub(crate) fn free_url(&mut self, span: (usize, usize), url: &str, place: Place) {
+        self.citations.free_url(url, span, place, self.parent());
+    }
+
     /// The rows of the five component tables, each place resolved by `resolve` into `para_id` and
     /// `para_offset`. The paragraphs table is the caller's.
     pub(crate) fn finish(self, resolve: impl Fn(Place) -> (Option<i32>, Option<i32>)) -> Components {

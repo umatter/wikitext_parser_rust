@@ -15,6 +15,11 @@
 //!   such template's parameter. Its fields come from the registry entry's field map (see below).
 //! - Inside a ref, every external link that is not inside a citation template is one `bare_link` row, with
 //!   the link's label as `title`. Outside refs, bare links are no rows.
+//! - So is every free URL that MediaWiki links (R73; `autolink.rs` has its rules: the site's protocols but
+//!   `//`, MediaWiki's URL characters, comments skipped, cut at `&lt;`, `&gt;` and `&nbsp;`, trailing `,;.:!?`
+//!   and an unmatched `)` left out), in a ref's body and not inside a citation template, an archive wrapper or
+//!   an external link: its `url` through `urls::analyse`, no `title`. Both paths emit it as an event (the walk
+//!   from text nodes, the fallback from the same running text), so the rows agree (R52).
 //! - An archive wrapper merges into the nearest preceding row of its body, when that row has no url or the
 //!   wrapper's original is the row's url (else it stands alone): it sets `archive_date_raw` and
 //!   `archive_url` (the wrapper's `url` when that is an archive URL, else `wayback_url(url, date)`; no date,
@@ -91,6 +96,8 @@ struct Body {
     dead: bool,
     /// Citation templates (not wrappers) open in this body.
     cite_depth: usize,
+    /// Archive wrappers open in this body.
+    wrap_depth: usize,
 }
 
 /// What an archive wrapper says.
@@ -410,6 +417,27 @@ impl<'t, 's> Citations<'t, 's> {
         self.slots[slot] = Some(row);
     }
 
+    /// Whether a free URL met now can be a row: in a ref's body (not a short footnote's), outside citation
+    /// templates and archive wrappers.
+    pub(super) fn wants_free_urls(&self) -> bool {
+        self.bodies
+            .last()
+            .is_some_and(|b| b.refinfo.is_some() && !b.skip && b.cite_depth == 0 && b.wrap_depth == 0)
+    }
+
+    /// A free URL (`autolink`) is met: in a ref's body and outside citation templates and archive wrappers, a
+    /// `bare_link` row with no title.
+    pub(super) fn free_url(&mut self, url: &str, span: (usize, usize), place: Place, parent: Parent) {
+        if !self.wants_free_urls() {
+            return;
+        }
+        let ref_id = self.bodies.last().and_then(|b| b.refinfo.as_ref()).map(|i| i.id);
+        let Some(slot) = self.reserve(place) else { return };
+        let mut row = self.blank(span, parent, "bare_link", ref_id);
+        set_url(&mut row, url);
+        self.slots[slot] = Some(row);
+    }
+
     /// A template is entered; `parent` is the template's own parent.
     pub(super) fn enter_template(&mut self, t: &TemplateRow, place: Place, parent: Parent) {
         let Some(e) = self.registry.template(&t.name, self.site) else { return };
@@ -419,7 +447,9 @@ impl<'t, 's> Citations<'t, 's> {
                 let nested = self.body_mut(place).cite_depth > 0;
                 let slot = if nested { None } else { self.reserve(place) };
                 let ref_id = self.bodies.last().and_then(|b| b.refinfo.as_ref()).map(|i| i.id);
-                if !e.archive_wrapper {
+                if e.archive_wrapper {
+                    self.body_mut(place).wrap_depth += 1;
+                } else {
                     self.body_mut(place).cite_depth += 1;
                 }
                 self.open.push(OpenCite { id: t.id, slot, wrapper: e.archive_wrapper, parent, ref_id, wrapped: Vec::new() });
@@ -437,7 +467,9 @@ impl<'t, 's> Citations<'t, 's> {
         let Some(e) = self.registry.template(&t.name, self.site) else { return };
         let body = self.bodies.last_mut().unwrap_or(&mut self.page);
         let nested = body.cite_depth > 0;
-        if !o.wrapper {
+        if o.wrapper {
+            body.wrap_depth = body.wrap_depth.saturating_sub(1);
+        } else {
             body.cite_depth = body.cite_depth.saturating_sub(1);
         }
         if o.wrapper {

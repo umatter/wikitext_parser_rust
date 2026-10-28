@@ -135,7 +135,12 @@ pub fn record_batch(table: &str, pages: &[PageOutput]) -> Result<RecordBatch> {
     if !TABLES.contains(&table) {
         anyhow::bail!("unknown table '{table}'");
     }
-    let schema = schema(table);
+    batch_of(&schema(table), table, pages)
+}
+
+/// `record_batch` against `schema`, which is `schema(table)`: tracing the row types costs more than a small
+/// batch, so a writer traces them once (R74).
+fn batch_of(schema: &SchemaRef, table: &str, pages: &[PageOutput]) -> Result<RecordBatch> {
     let fields = schema.fields();
     let columns = match table {
         "pages" => {
@@ -166,6 +171,8 @@ const ROW_GROUP_BYTES: usize = 64 << 20;
 /// `pages` part means every other part of that input is finished too.
 pub struct PartWriter {
     table: String,
+    /// `schema(table)`, traced once.
+    schema: SchemaRef,
     tmp: PathBuf,
     path: PathBuf,
     writer: ArrowWriter<File>,
@@ -186,8 +193,9 @@ impl PartWriter {
                 SCHEMA_VERSION.to_string(),
             )]))
             .build();
-        let writer = ArrowWriter::try_new(file, schema(table), Some(props))?;
-        Ok(PartWriter { table: table.to_string(), tmp, path, writer, rows: 0 })
+        let schema = schema(table);
+        let writer = ArrowWriter::try_new(file, schema.clone(), Some(props))?;
+        Ok(PartWriter { table: table.to_string(), schema, tmp, path, writer, rows: 0 })
     }
 
     pub fn table(&self) -> &str {
@@ -195,7 +203,7 @@ impl PartWriter {
     }
 
     pub fn append(&mut self, pages: &[PageOutput]) -> Result<()> {
-        let batch = record_batch(&self.table, pages)?;
+        let batch = batch_of(&self.schema, &self.table, pages)?;
         self.rows += batch.num_rows();
         self.writer.write(&batch)?;
         if self.writer.in_progress_size() > ROW_GROUP_BYTES {

@@ -13,4 +13,5 @@ pub mod spans;
 pub mod urls;
 pub mod walk;
 pub mod attrs;
+pub mod autolink;
 pub mod compare;

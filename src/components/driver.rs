@@ -422,9 +422,11 @@ impl Sink {
         })
     }
 
+    /// Appends a batch. The tables' writers run in parallel (R74): each part file depends only on its own
+    /// writer and the batches in order, so the output does not depend on the threads.
     fn append(&mut self, pages: &[PageOutput]) -> Result<()> {
         match self {
-            Sink::Parquet(writers) => writers.iter_mut().try_for_each(|w| w.append(pages)),
+            Sink::Parquet(writers) => writers.par_iter_mut().try_for_each(|w| w.append(pages)),
             Sink::Jsonl { file, rows, .. } => {
                 for p in pages {
                     serde_json::to_writer(&mut *file, &output::page_value(p))?;
@@ -506,7 +508,7 @@ fn process_input(ctx: &Ctx, path: &Path, stem: &str) -> Result<(InputEntry, Vec<
             tally.add(out, *secs);
         }
         let outputs: Vec<PageOutput> = done.into_iter().map(|(o, _)| o).collect();
-        sink.append(&outputs)?;
+        ctx.pool.install(|| sink.append(&outputs))?;
     }
     let outputs = sink.finish(stem)?;
     let entry =

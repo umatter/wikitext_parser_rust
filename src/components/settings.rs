@@ -219,6 +219,12 @@ impl Settings {
         self.protocols.iter().any(|p| b.len() >= p.len() && b[..p.len()].eq_ignore_ascii_case(p.as_bytes()))
     }
 
+    /// The protocols a free URL can start with (`autolink`): the site's URL protocols without the
+    /// protocol-relative `//`, as MediaWiki's `UrlUtils::validAbsoluteProtocols` gives them; lowercased.
+    pub fn free_link_protocols(&self) -> impl Iterator<Item = &str> {
+        self.protocols.iter().map(String::as_str).filter(|p| !p.starts_with("//"))
+    }
+
     /// How the parser reads a tag of this lowercased name; `None` when it reads it as text.
     pub fn tag_class(&self, name: &str) -> Option<TagClass> {
         self.tag_classes.get(name).copied()

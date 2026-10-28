@@ -46,6 +46,7 @@ mod tree;
 
 use parse_wiki_text_2::{DefinitionListItemType, Node, Positioned};
 
+use crate::autolink;
 use crate::frontend::Parsed;
 use crate::model::Components;
 use crate::registry::Registry;
@@ -187,6 +188,11 @@ struct Ctx {
     from: usize,
     /// What the parts and parameters among the children belong to.
     owner: Owner,
+    /// Free URLs in text here are links (R73): not in a link, an external link, a name, a template parameter
+    /// `{{{…}}}`, a file, a category, a comment, or an extension tag whose content is raw or adds no text.
+    autolink: bool,
+    /// The innermost element around is a template (a parameter value): `|` and `}}` end a free URL.
+    in_template: bool,
 }
 
 /// The element a part (a name, a value) or a parameter is a child of.
@@ -312,6 +318,11 @@ struct Walker<'t, 's> {
     /// The end of a link the walk has just left, until the next element. The parser repeats a piped link's
     /// trail as the link's next sibling: a text node that starts before the link's end.
     after_link: Option<usize>,
+    /// `<pre>` tags open: the parser reads `<pre>` as an HTML tag, MediaWiki its content as raw text, where no
+    /// free URL is a link.
+    pre: usize,
+    /// Where the last run of URL characters ended (`autolink::scan`).
+    free_until: usize,
 }
 
 impl<'t, 's> Walker<'t, 's> {
@@ -332,6 +343,8 @@ impl<'t, 's> Walker<'t, 's> {
             title_at: None,
             from: 0,
             owner: Owner::None,
+            autolink: true,
+            in_template: false,
         };
         Walker {
             text,
@@ -344,6 +357,8 @@ impl<'t, 's> Walker<'t, 's> {
             ctx: vec![root],
             lists: 0,
             after_link: None,
+            pre: 0,
+            free_until: 0,
         }
     }
 
@@ -376,6 +391,16 @@ impl<'t, 's> Walker<'t, 's> {
             Sink::Para => self.paras.push_str(s, start, end),
             Sink::Flat(i) => self.flats[i].push(s),
             Sink::Mute => {}
+        }
+    }
+
+    /// The free URLs whose protocol starts in the text `from..to` become events (R73).
+    fn free_urls(&mut self, from: usize, to: usize, in_template: bool) {
+        let mut found = Vec::new();
+        autolink::scan(self.text, self.settings, from, to, in_template, &mut self.free_until, &mut found);
+        for u in found {
+            let place = self.place();
+            self.collect.free_url((u.start, u.end), &u.url, place);
         }
     }
 
@@ -452,6 +477,9 @@ impl<'t, 's> Walker<'t, 's> {
                         _ => return,
                     }
                 }
+                if around.autolink && self.pre == 0 && self.collect.wants_free_urls() {
+                    self.free_urls(start, start + value.len(), around.in_template);
+                }
                 if around.from > start {
                     // The part of a template name after its colon.
                     match value.get(around.from - start..) {
@@ -481,6 +509,12 @@ impl<'t, 's> Walker<'t, 's> {
                 if name == "br" {
                     self.add_str(around.sink, " ", start, end);
                 }
+                if name == "pre" {
+                    match node {
+                        Node::StartTag { .. } => self.pre += 1,
+                        _ => self.pre = self.pre.saturating_sub(1),
+                    }
+                }
             }
             Node::ParagraphBreak { .. } => self.boundary(around),
             Node::HorizontalDivider { .. } => {
@@ -505,6 +539,7 @@ impl<'t, 's> Walker<'t, 's> {
             }
             Node::Link { target, text, .. } => {
                 self.touch(around, start, end);
+                c.autolink = false;
                 if self.is_interlanguage(target) {
                     self.exclude(around, c);
                 } else if !self.has_label(start) {
@@ -518,6 +553,7 @@ impl<'t, 's> Walker<'t, 's> {
             Node::ExternalLink { nodes, .. } => {
                 self.touch(around, start, end);
                 c.url = true;
+                c.autolink = false;
                 self.collect.external_link((start, end), || label_of(nodes), self.place());
             }
             Node::Tag { name, .. } => {
@@ -525,6 +561,10 @@ impl<'t, 's> Walker<'t, 's> {
                 self.touch(around, start, end);
                 if EXCLUDED_TAGS.contains(&name.as_ref()) {
                     self.exclude(around, c);
+                }
+                c.in_template = false;
+                if name == "nowiki" || (EXCLUDED_TAGS.contains(&name.as_ref()) && !matches!(name.as_ref(), "ref" | "references")) {
+                    c.autolink = false;
                 }
                 match name.as_ref() {
                     "ref" => {
@@ -542,6 +582,7 @@ impl<'t, 's> Walker<'t, 's> {
                 self.touch(around, start, end);
                 self.exclude(around, c);
                 c.owner = Owner::Template;
+                c.in_template = true;
             }
             Node::Parameter { .. }
             | Node::Image { .. }
@@ -551,6 +592,7 @@ impl<'t, 's> Walker<'t, 's> {
             | Node::Redirect { .. } => {
                 self.touch(around, start, end);
                 self.exclude(around, c);
+                c.autolink = false;
             }
             Node::Table { .. } => {
                 self.boundary(around);
@@ -638,9 +680,13 @@ impl<'n, 'a> Visit<'n, 'a> for Walker<'_, '_> {
                 self.flats.push(Flat::default());
                 c.sink = Sink::Flat(self.flats.len() - 1);
                 c.from = self.collect.split_from().unwrap_or(0);
+                c.autolink = false;
             }
             // Names and attributes never add text.
-            Element::Part(Part::Name | Part::Attributes, _) => c.sink = Sink::Mute,
+            Element::Part(Part::Name | Part::Attributes, _) => {
+                c.sink = Sink::Mute;
+                c.autolink = false;
+            }
             // A parameter value is a flat text.
             Element::Part(Part::Value, _) if around.owner == Owner::Param => {
                 self.flats.push(Flat::default());

@@ -89,6 +89,7 @@ use std::collections::HashMap;
 
 use parse_wiki_text_2::Node;
 
+use crate::autolink::{self, FreeUrl};
 use crate::frontend;
 use crate::model::Components;
 use crate::page::DEFAULT_DEPTH_CAP;
@@ -972,6 +973,51 @@ impl<'t, 's> Scanner<'t, 's> {
         None
     }
 
+    /// The free URLs of the page (`autolink`, R73), in order: in running text, ref bodies, ref lists, the content
+    /// of tags that add text and template parameter values; not in links, external links, names, template
+    /// parameters `{{{…}}}`, comments, raw or muted regions or HTML tags, as the walk reads them.
+    fn free_urls(&self) -> Vec<FreeUrl> {
+        let mut out = Vec::new();
+        let mut until = 0;
+        self.free_in(0, self.text.len(), false, &mut until, &mut out);
+        out
+    }
+
+    /// The free URLs of `a..b`, whose elements start at or after `a`; `in_template`: a parameter value.
+    fn free_in(&self, a: usize, b: usize, in_template: bool, until: &mut usize, out: &mut Vec<FreeUrl>) {
+        let mut k = self.items.partition_point(|it| it.start < a);
+        let mut pos = a;
+        while pos < b {
+            while let Some(it) = self.items.get(k) {
+                match (it.closed, it.start < pos) {
+                    (false, _) => k += 1,
+                    (true, true) => k = it.next,
+                    (true, false) => break,
+                }
+            }
+            let next = self.items.get(k).map_or(b, |it| it.start.min(b));
+            if pos < next {
+                autolink::scan(self.text, self.settings, pos, next, in_template, until, out);
+            }
+            if next >= b {
+                break;
+            }
+            let it = &self.items[k];
+            match it.kind {
+                Kind::Template => {
+                    for (_, value, _) in self.layout(it).params {
+                        self.free_in(value.0, value.1, true, until, out);
+                    }
+                }
+                Kind::Ref | Kind::RefList | Kind::Tag { muted: false } => {
+                    self.free_in(it.inner.0, it.inner.1, false, until, out);
+                }
+                _ => {}
+            }
+            (pos, k) = (it.end, it.next);
+        }
+    }
+
     /// The text of `a..b` (R53).
     fn strip(&self, a: usize, b: usize) -> String {
         self.strip_as(a, b, false)
@@ -1134,16 +1180,14 @@ impl<'t, 's> Scanner<'t, 's> {
         }
         let mut collect = Collect::new(self.text, chars, self.settings, registry);
         let mut open: Vec<Open> = Vec::new();
-        let (mut k, mut h) = (0, 0);
+        let (mut k, mut h, mut f) = (0, 0, 0);
         let mut paras = Paras::default();
+        let free = self.free_urls();
         loop {
             let head = self.heads.get(h).map(|x| x.start);
             let item = self.items.get(k).map(|x| x.start);
-            let pos = match (head, item) {
-                (None, None) => usize::MAX,
-                (Some(a), Some(b)) => a.min(b),
-                (a, b) => a.or(b).unwrap_or(usize::MAX),
-            };
+            let url = free.get(f).map(|u| u.start);
+            let pos = [head, item, url].into_iter().flatten().min().unwrap_or(usize::MAX);
             while open.last().is_some_and(|o| o.end <= pos) {
                 let o = open.pop().expect("checked");
                 let it = &self.items[o.item];
@@ -1161,6 +1205,16 @@ impl<'t, 's> Scanner<'t, 's> {
             }
             if pos == usize::MAX {
                 break;
+            }
+            if url == Some(pos) {
+                // A free URL is a row only in a ref's body, so only inside a component (the collector decides).
+                let u = &free[f];
+                f += 1;
+                if let Some(o) = open.first() {
+                    let place = Place { section_id: collect.section(), para: Some((o.slot, 0)) };
+                    collect.free_url((u.start, u.end), &u.url, place);
+                }
+                continue;
             }
             if head == Some(pos) {
                 let Head { start, end, level } = self.heads[h];
