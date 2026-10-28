@@ -7,7 +7,7 @@
 //! # Bodies
 //!
 //! A *body* is what rows are grouped by: the inside of a ref, or, outside refs, the stretch of the page
-//! that sits in one paragraph place (one section and paragraph: a bibliography entry, a list item).
+//! in one section and paragraph (a bibliography entry, a list item), whatever text lies between.
 //!
 //! - A ref of a short footnote template (registry `family = "short"`, `{{sfn}}`) has no body: its arguments
 //!   point at a source, they are none. A ref without a body (a reuse, an empty tag) has no rows.
@@ -15,9 +15,10 @@
 //!   such template's parameter. Its fields come from the registry entry's field map (see below).
 //! - Inside a ref, every external link that is not inside a citation template is one `bare_link` row, with
 //!   the link's label as `title`. Outside refs, bare links are no rows.
-//! - An archive wrapper merges into the nearest preceding row of its body: it sets `archive_date_raw` and
+//! - An archive wrapper merges into the nearest preceding row of its body, when that row has no url or the
+//!   wrapper's original is the row's url (else it stands alone): it sets `archive_date_raw` and
 //!   `archive_url` (the wrapper's `url` when that is an archive URL, else `wayback_url(url, date)`; no date,
-//!   no archive URL), and gives the row its original as `url` when the row has none. A wrapper inside a
+//!   no archive URL), unless the row has an archive already (then it adds nothing), and gives the row its original as `url` when the row has none. A wrapper inside a
 //!   citation template's parameter merges into that template's row. With nothing before it, it is a
 //!   standalone row of the wrapper's family with the original as `url`.
 //! - A `link_status` template sets `dead_link` on every row of its body.
@@ -67,8 +68,8 @@ struct Body {
     /// A short footnote: nothing in it is a source.
     skip: bool,
     refinfo: Option<RefInfo>,
-    /// Out of refs: the place the body covers.
-    key: Option<Place>,
+    /// Out of refs: the section and paragraph slot the body covers (R49: not the offset).
+    key: Option<(i32, Option<usize>)>,
     /// The slots of the body, in order.
     slots: Vec<usize>,
     dead: bool,
@@ -205,10 +206,11 @@ impl<'t, 's> Citations<'t, 's> {
 
     /// The body that holds what is met at `place`: the innermost ref's, or the page's for that place.
     fn body_mut(&mut self, place: Place) -> &mut Body {
-        if self.bodies.is_empty() && self.page.key != Some(place) && self.page.cite_depth == 0 {
+        let key = (place.section_id, place.para.map(|p| p.0));
+        if self.bodies.is_empty() && self.page.key != Some(key) && self.page.cite_depth == 0 {
             let old = std::mem::take(&mut self.page);
             self.close_body(&old);
-            self.page.key = Some(place);
+            self.page.key = Some(key);
         }
         self.bodies.last_mut().unwrap_or(&mut self.page)
     }
@@ -308,7 +310,7 @@ impl<'t, 's> Citations<'t, 's> {
             let has_rows = body.slots.iter().any(|&s| s != info.plain && self.slots[s].is_some());
             if !has_rows && !r.body_raw.is_empty() {
                 let mut row = self.blank(info.span, Some(("ref", info.id)), "plain_text", Some(info.id));
-                row.text = Some(r.body_text.clone());
+                row.text = Some(r.body_text.clone()).filter(|t| !t.is_empty());
                 self.slots[info.plain] = Some(row);
             }
         }
@@ -384,8 +386,17 @@ impl<'t, 's> Citations<'t, 's> {
 
     /// An archive wrapper merges into the nearest preceding row of its body, else stands alone in `slot`.
     fn merge_or_stand(&mut self, slot: usize, w: Wrapper, t: &TemplateRow, e: &TemplateEntry, parent: Parent, ref_id: Option<i32>) {
-        let body = self.bodies.last().unwrap_or(&self.page);
-        let prev = body.slots.iter().rev().copied().find(|&s| s < slot && self.slots[s].is_some());
+        let place = self.places[slot];
+        let body_slots = self.body_mut(place).slots.clone();
+        let prev = body_slots.iter().rev().copied().find(|&s| s < slot && self.slots[s].is_some());
+        // R48: only a row with no url, or the wrapper's own original, takes the wrapper.
+        let prev = prev.filter(|&p| {
+            let row_url = self.slots[p].as_ref().and_then(|r| r.url.as_deref());
+            match (row_url, &w.original) {
+                (Some(u), Some(o)) => urls::analyse(u).url == urls::analyse(o).url,
+                _ => true,
+            }
+        });
         match prev {
             Some(p) => {
                 if let Some(row) = self.slots[p].as_mut() {
@@ -490,6 +501,10 @@ fn wrapper_of(t: &TemplateRow, e: &TemplateEntry) -> Wrapper {
 }
 
 fn apply_wrapper(row: &mut CitationRow, w: &Wrapper) {
+    // A row keeps the archive it has, and its date; the wrapper adds nothing.
+    if row.archive_url.is_some() {
+        return;
+    }
     if w.date.is_some() {
         row.archive_date_raw = w.date.clone();
     }

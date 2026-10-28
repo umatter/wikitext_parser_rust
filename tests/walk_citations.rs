@@ -211,3 +211,42 @@ fn public_corpus_counts() {
     eprintln!("public citations by family: {by_family:?}; in_ref {in_ref}, with host {with_host}");
     assert!(in_ref > 1000);
 }
+
+#[test]
+fn page_level_bodies_are_paragraphs_not_offsets() {
+    // Text between items does not split the body.
+    let c = cites("* {{cite web|url=http://b.ru}}. {{dead link}}");
+    assert_eq!(c.iter().map(|x| x.dead_link).collect::<Vec<_>>(), vec![true]);
+    let c = cites("* {{cite web|url=http://c.ru}} текст {{webarchive|url=https://web.archive.org/web/2012/http://c.ru|date=2012}}");
+    assert_eq!(c.len(), 1);
+    assert_eq!(c[0].archive_url.as_deref(), Some("https://web.archive.org/web/2012/http://c.ru"));
+    // Two list items are two bodies.
+    let c = cites("* {{cite web|url=http://a.ru}}\n* {{cite web|url=http://b.ru}} {{dead link}}");
+    assert_eq!(c.iter().map(|x| x.dead_link).collect::<Vec<_>>(), vec![false, true]);
+    let c = cites("* {{cite web|url=http://a.ru}}\n* {{webarchive|url=http://b.ru|date=2012}}");
+    assert_eq!(c.len(), 2);
+}
+
+#[test]
+fn wrappers_never_attach_another_pages_snapshot() {
+    let wrap = "{{webarchive|url=https://web.archive.org/web/2012/http://g.ru|date=2012}}";
+    let c = cites(&format!("<ref>{{{{cite web|url=http://f.ru|archive-url=https://web.archive.org/web/2011/http://f.ru}}}} {wrap}</ref>"));
+    assert_eq!(c.iter().map(|x| x.url.as_deref().unwrap()).collect::<Vec<_>>(), vec!["http://f.ru", "http://g.ru"]);
+    assert_eq!(c[0].archive_url.as_deref(), Some("https://web.archive.org/web/2011/http://f.ru"));
+    assert_eq!(c[1].archive_url.as_deref(), Some("https://web.archive.org/web/2012/http://g.ru"));
+    // Same original, row already archived: the row keeps its own archive and date.
+    let c = cites("<ref>{{cite web|url=http://f.ru|archive-url=https://web.archive.org/web/2011/http://f.ru|archive-date=2011}} {{webarchive|url=https://web.archive.org/web/2012/http://f.ru|date=2012}}</ref>");
+    assert_eq!(c.len(), 1);
+    assert_eq!((c[0].archive_url.as_deref(), c[0].archive_date_raw.as_deref()), (Some("https://web.archive.org/web/2011/http://f.ru"), Some("2011")));
+    // Same original, no archive yet: it merges.
+    let c = cites("<ref>{{cite web|url=http://f.ru}} {{webarchive|url=https://web.archive.org/web/2012/http://f.ru|date=2012}}</ref>");
+    assert_eq!(c.len(), 1);
+    assert_eq!(c[0].archive_date_raw.as_deref(), Some("2012"));
+}
+
+#[test]
+fn empty_plain_text_has_no_text() {
+    let c = cites("<ref>{{some other|x}}</ref>");
+    assert_eq!((c[0].family.as_str(), c[0].text.clone()), ("plain_text", None));
+    assert_eq!(c[0].fp, fp("plain_text\u{1f}"));
+}

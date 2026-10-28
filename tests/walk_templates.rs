@@ -345,7 +345,7 @@ fn check_page(pg: &Page, c: &Components, reg: &Registry, site: &str, n: &mut [us
                 ck(r.is_some_and(|(a, b, _)| (a, b) == (x.start, x.end)), "plain_text has its ref's span", &String::new);
                 let got = (x.parent_type.as_deref(), x.parent_id);
                 ck(got == (Some("ref"), r.map(|r| r.2)), "plain_text parent is its ref", &|| format!("{got:?}"));
-                ck(x.text.is_some() && x.template_id.is_none(), "plain_text has text and no template", &String::new);
+                ck(x.template_id.is_none(), "plain_text has no template", &String::new);
             }
             "bare_link" => {
                 ck(s.starts_with('[') || s.contains("://") || s.starts_with("//"), "bare_link span is a link", &|| format!("{s:?}"));
